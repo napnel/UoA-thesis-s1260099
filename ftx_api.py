@@ -6,10 +6,10 @@ from datetime import datetime
 from ftx import FtxClient
 from dotenv import load_dotenv
 
-from utils import Position, Order, Wallet
+# from utils import Position, Order, Wallet
 
 
-class FTXAPI():
+class FTXAPI:
     def __init__(self):
         super().__init__()
         load_dotenv(verbose=True)
@@ -35,33 +35,32 @@ class FTXAPI():
         df = df.astype(float)
         return df
 
-    def get_position(self, symbol: str) -> Position:
-        response = self.client.get_position(symbol)
-        size = response['size'] if response['side'] == 'buy' else -response['size']
-        position = Position(size=size, entry_price=response["recentAverageOpenPrice"])
-        return position
+    # def get_position(self, symbol: str) -> Position:
+    #     response = self.client.get_position(symbol)
+    #     size = response["size"] if response["side"] == "buy" else -response["size"]
+    #     position = Position(size=size, entry_price=response["recentAverageOpenPrice"])
+    #     return position
 
-    def get_wallet(self) -> Wallet:
-        response = self.client.get_account_info()
-        wallet = Wallet(collateral=response["collateral"], free_collateral=response["freeCollateral"], leverage=response["leverage"])
-        return wallet
+    # def get_wallet(self) -> Wallet:
+    #     response = self.client.get_account_info()
+    #     wallet = Wallet(collateral=response["collateral"], free_collateral=response["freeCollateral"], leverage=response["leverage"])
+    #     return wallet
 
-    def place_order(self, order: Order):
-        response = self.client.place_order(order.symbol, order.side.lower(), order.price, order.size, "limit")
-        return response
+    # def place_order(self, order: Order):
+    #     response = self.client.place_order(order.symbol, order.side.lower(), order.price, order.size, "limit")
+    #     return response
 
-    def conditional_order(self, order: Order, type: str, trigger_price):
-        response = self.client.place_conditional_order(order.symbol, order.side.lower(), order.size, type, order.price, trigger_price=trigger_price)
-        return response
+    # def conditional_order(self, order: Order, type: str, trigger_price):
+    #     response = self.client.place_conditional_order(order.symbol, order.side.lower(), order.size, type, order.price, trigger_price=trigger_price)
+    #     return response
 
-    def cancel_all_order(self, symbol: str):
-        response = self.client.cancel_orders(symbol)
-        return response
+    # def cancel_all_order(self, symbol: str):
+    #     response = self.client.cancel_orders(symbol)
+    #     return response
 
-    def get_trade_records(self):
-        return super().get_trade_records()
+    # def get_trade_records(self):
+    #     return super().get_trade_records()
 
-    def get_orderbook(self, symbol, depth=10):
-        response = self.client.get_orderbook(symbol, depth)
-        return response
-
+    # def get_orderbook(self, symbol, depth=10):
+    #     response = self.client.get_orderbook(symbol, depth)
+    #     return response
