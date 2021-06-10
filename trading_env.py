@@ -1,113 +1,125 @@
+# Backtestingのモジュールを使う必要ないかも
+
 import numpy as np
 import pandas as pd
 from functools import partial
 
 import gym
 from gym import spaces
-from backtesting.backtesting import _Broker
-from backtesting._util import _Data
 
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3 import A2C
+from stable_baselines3.common.vec_env.base_vec_env import VecEnv
 from ftx_api import FTXAPI
+from broker import Broker
 
 
 class TradingEnv(gym.Env):
-    def __init__(
-        self,
-        window_size: int,
-        df: pd.DataFrame,
-        cash: float,
-        commission: float = 0.0,
-        margin: float = 1.0,
-        trade_on_close: bool = False,
-        hedging: bool = False,
-        exclusive_orders: bool = False,
-    ):
+    def __init__(self, lookback_widow_size: int, df: pd.DataFrame, assets: float, fee: float = 0.0):
         self._df = df.copy()
-        self._broker = partial(
-            _Broker,
-            cash=cash,
-            commission=commission,
-            margin=margin,
-            trade_on_close=trade_on_close,
-            hedging=hedging,
-            exclusive_orders=exclusive_orders,
-            index=self._df.index,
-        )
-        self.window_size = window_size
+        self._broker = partial(Broker, assets=assets, fee=fee)
+        self.lookback_widow_size = lookback_widow_size
         self.action_space = spaces.Discrete(3)
-        self.state_size = 5
-        self.observation_space = spaces.Box(low=0, high=np.inf, shape=(self.window_size * self.state_size,))
+        self.state_size = 5  # Open, High, Low, Close, Volume
+        self.observation_space = spaces.Box(low=0, high=np.inf, shape=(self.lookback_widow_size * self.state_size,))
 
+        self.initial_assets = assets
         self.current_step: int = 0
 
     def reset(self):
-        data = _Data(self._df.copy(deep=False))
-        self.broker: _Broker = self._broker(data=data)
         self.current_step = 0
-        self.coin_bought = 0.0
+        self.begin_assets = self.initial_assets
+        self.broker: Broker = self._broker(data=self._df)
 
-        state = self.broker._data.df.iloc[: self.window_size].values
-        state = state.reshape(
-            self.window_size * self.state_size,
+        self.state = self.broker.get_candles(0, self.lookback_widow_size).reshape(
+            self.lookback_widow_size * self.state_size,
         )
-        return state
+        return self.state
 
     def step(self, action):
         """
         action: 0 -> Hold, 1 -> Buy, 2 -> Sell
         """
-        # self.price = self.df.iloc[self.window_size + self.current_step, :].values
-        # self.price = np.squeeze(self.price)
+        self.current_step += 1
+        self.broker.current_index = self.lookback_widow_size + self.current_step
+        self.action = action
+        self.current_price = self.broker.current_price
 
-        obs = self.broker._data.df.iloc[self.current_step : self.window_size + self.current_step].values
-        obs = obs.reshape(
-            self.window_size * self.state_size,
-        )
-
-        if action == 0:
+        if self.action == 0:
             pass
 
-        elif action == "buy":
-            self.broker.new_order(1)
+        elif self.action == 1:
+            self.broker.position.close()
+            self.broker.buy(size=1, limit_price=self.current_price)
 
-        elif action == "sell":
-            self.broker.new_order(1)
+        elif self.action == 2:
+            self.broker.position.close()
+            self.broker.sell(size=1, limit_price=self.current_price)
 
-        reward = self.broker.position.pl
+        self.state = self.broker.get_candles(self.current_step, self.lookback_widow_size + self.current_step).reshape(
+            self.lookback_widow_size * self.state_size,
+        )
 
-        done = False
-        if self.window_size + self.current_step + 1 == len(self._df):
-            done = True
+        current_assets = self.broker.assets + self.broker.position.profit_or_loss
+        self.reward = current_assets - self.begin_assets
 
-        info = {}
-        self.current_step += 1
+        self.done = False
+        if self.lookback_widow_size + self.current_step + 1 == len(self._df):
+            self.done = True
 
-        return obs, reward, done, info
+        return self.state, self.reward, self.done, {}
 
     def render(self, mode="human"):
-        print(f"Total Step: {self.current_step}")
+        print(f"Step: {self.current_step}")
+        print(f"Assets: {self.broker.assets}")
+        print(f"Action: {self.action}")
+        print(f"Reward: {self.reward}, Done: {self.done}")
 
     def seed(self, seed=None):
         self.np_random, seed = gym.utils.seeding.np_random(seed)
         return [seed]
 
 
+def evaluate(model: A2C, env: VecEnv, render=True):
+    state = env.reset()
+    done = False
+    episode_rewards = []
+    episode_reward = 0.0
+
+    while not done:
+        action, state = model.predict(state)
+        state, reward, done, info = env.step(action)
+
+        episode_reward += reward
+
+        if render:
+            env.render()
+
+        episode_rewards.append(episode_reward)
+
+        if done:
+            break
+
+    mean_reward = np.mean(episode_rewards)
+    std_reward = np.std(episode_rewards)
+
+    return mean_reward, std_reward
+
+
 def main():
     ftx = FTXAPI()
-    df = ftx.fetch_candle("ETH-PERP", interval=15 * 60, limit=5 * 672)
+    df = ftx.fetch_candle("ETH-PERP", interval=15 * 60, limit=3 * 672)
     windows_size = 50
-    max_step_size = len(df) - windows_size
-    env = TradingEnv(window_size=windows_size, df=df, cash=10000)
+    env = TradingEnv(lookback_widow_size=windows_size, df=df, assets=10000)
     check_env(env, warn=True)
     env = make_vec_env(lambda: env, n_envs=1)
-    model = A2C("MlpPolicy", env, verbose=1).learn(max_step_size)
-    mean_reward, _ = evaluate_policy(model, env)
-    print(mean_reward)
+    model = A2C("MlpPolicy", env, verbose=1).learn(total_timesteps=10000)
+    # mean_reward, _ = evaluate_policy(model, env, render=False)
+    mean_reward, std_reward = evaluate(model, env, render=True)
+    print(f"mean reward: {mean_reward}, std reward: {std_reward}")
 
 
 if __name__ == "__main__":
