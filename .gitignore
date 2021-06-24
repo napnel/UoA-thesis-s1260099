@@ -130,3 +130,6 @@ dmypy.json
 
 # User
 .vscode
+*.zip
+notebook
+*.html
