@@ -133,3 +133,4 @@ dmypy.json
 *.zip
 notebook
 *.html
+data
