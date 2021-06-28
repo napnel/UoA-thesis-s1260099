@@ -19,11 +19,20 @@ class Broker:
         return self.new_order(-size, limit_price)
 
     def new_order(self, size, limit_price):
-        self.position.size = size
-        self.position.entry_price = limit_price
+        if size != 0:
+            self.position.size = size
+            self.position.entry_price = limit_price
 
     def get_candles(self, start, end) -> np.ndarray:
         return self.data.iloc[start:end, :].values
+
+    @property
+    def free_assets(self):
+        return self.assets - self.position.size * self.current_price
+
+    @property
+    def equity(self):
+        return self.assets + self.position.profit_or_loss
 
     @property
     def latest_candle(self) -> np.ndarray:
