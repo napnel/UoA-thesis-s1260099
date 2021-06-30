@@ -1,8 +1,9 @@
 import numpy as np
 import pandas as pd
 
-from base import FTXAPI
+from broker import FTXAPI
 from envs import TradingEnv
+from utils import load_data
 
 
 from stable_baselines3.common.vec_env import SubprocVecEnv
@@ -40,12 +41,13 @@ def evaluate(model: A2C, env, render=True):
 
 def main():
     ftx = FTXAPI()
-    df = ftx.fetch_candle("ETH-PERP", interval=15 * 60, limit=3 * 672)
+    # df = ftx.fetch_candle("ETH-PERP", interval=15 * 60, limit=3 * 672)
+    df = load_data("./data/ETHUSD/15", limit_days=5)
     lookback_window = 50
     env = TradingEnv(lookback_window=lookback_window, df=df, assets=10000)
-    check_env(env, warn=True)
+    # check_env(env, warn=True)
     env = make_vec_env(lambda: env, n_envs=1)
-    model = A2C("MlpPolicy", env, verbose=1).learn(total_timesteps=100000)
+    model = A2C("MlpPolicy", env, verbose=1).learn(total_timesteps=30000)
     model.save("a2c")
     # mean_reward, _ = evaluate_policy(model, env, render=False)
     mean_reward, std_reward = evaluate(model, env, render=True)

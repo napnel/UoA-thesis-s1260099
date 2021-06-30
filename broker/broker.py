@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from typing import List
+from typing import List, Optional
 
 
 class Broker:
@@ -12,23 +12,21 @@ class Broker:
         self.fee = fee
         self.position: Position = Position(self)
 
-    def buy(self, size, limit_price):
-        return self.new_order(size, limit_price)
-
-    def sell(self, size, limit_price):
-        return self.new_order(-size, limit_price)
-
     def new_order(self, size, limit_price):
         if size != 0:
-            self.position.size = size
-            self.position.entry_price = limit_price
+            if self.position.size == 0:
+                self.position.size = size
+                self.position.entry_price = limit_price
+            else:
+                assert self.position.size == -size, f"position don't close: {self.position.size}, {size}"
+                self.position.close()
 
     def get_candles(self, start, end) -> np.ndarray:
         return self.data.iloc[start:end, :].values
 
     @property
     def free_assets(self):
-        return self.assets - self.position.size * self.current_price
+        return self.assets - abs(self.position.size) * self.current_price
 
     @property
     def equity(self):
@@ -58,7 +56,7 @@ class Position:
         self.__entry_price = None
 
     def __repr__(self) -> str:
-        return f"Position(size: {self.size}, entry_price: {self.entry_price})"
+        return f"Position(size: {self.size}, entry_price: {self.entry_price}, pl: {self.profit_or_loss:.0f})"
 
     @property
     def size(self) -> float:
