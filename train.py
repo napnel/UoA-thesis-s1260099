@@ -43,7 +43,7 @@ def main():
     ftx = FTXAPI()
     # df = ftx.fetch_candle("ETH-PERP", interval=15 * 60, limit=3 * 672)
     df = load_data("./data/ETHUSD/15", limit_days=5)
-    lookback_window = 50
+    lookback_window = 200
     env = TradingEnv(lookback_window=lookback_window, df=df, assets=10000)
     # check_env(env, warn=True)
     env = make_vec_env(lambda: env, n_envs=1)

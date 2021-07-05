@@ -11,12 +11,14 @@ class Broker:
         self.assets = assets
         self.fee = fee
         self.position: Position = Position(self)
+        self.closed_trades = pd.DataFrame(columns=["size", "entry_price", "exit_price", "PnL", "entry_time", "exit_time"])
 
     def new_order(self, size, limit_price):
         if size != 0:
             if self.position.size == 0:
                 self.position.size = size
                 self.position.entry_price = limit_price
+                self.position.entry_time = self.data.index[self.current_step]
             else:
                 assert self.position.size == -size, f"position don't close: {self.position.size}, {size}"
                 self.position.close()
@@ -54,6 +56,7 @@ class Position:
         self.__broker = broker
         self.__size = 0
         self.__entry_price = None
+        self.__entry_time = None
 
     def __repr__(self) -> str:
         return f"Position(size: {self.size}, entry_price: {self.entry_price}, pl: {self.profit_or_loss:.0f})"
@@ -66,6 +69,10 @@ class Position:
     def entry_price(self) -> float:
         return self.__entry_price
 
+    @property
+    def entry_time(self):
+        return self.__entry_time
+
     @size.setter
     def size(self, size):
         self.__size = size
@@ -73,6 +80,10 @@ class Position:
     @entry_price.setter
     def entry_price(self, price):
         self.__entry_price = price
+
+    @entry_time.setter
+    def entry_time(self, time):
+        self.__entry_time = time
 
     @property
     def is_long(self) -> bool:
@@ -90,5 +101,15 @@ class Position:
 
     def close(self):
         self.__broker.assets += self.profit_or_loss
+        trade = {
+            "size": self.size,
+            "entry_price": self.entry_price,
+            "exit_price": self.__broker.current_price,
+            "PnL": self.profit_or_loss,
+            "entry_time": self.entry_time,
+            "exit_time": self.__broker.current_datetime,
+        }
+        self.__broker.closed_trades = self.__broker.closed_trades.append(trade, ignore_index=True)
         self.__size = 0
         self.__entry_price = None
+        self.__entry_time = None
