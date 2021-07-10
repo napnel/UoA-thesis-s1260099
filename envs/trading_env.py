@@ -5,27 +5,28 @@ from functools import partial
 import gym
 from gym import spaces
 
-from broker import Broker
+from .broker import Broker
 
 
 class TradingEnv(gym.Env):
-    def __init__(self, lookback_window: int, df: pd.DataFrame, assets: float, fee: float = 0.0):
+    def __init__(self, lookback_window: int, df: pd.DataFrame, preprocessed_df: pd.DataFrame, assets: float, fee: float = 0.0):
         self._df = df.copy()
+        self._preprocessed_df = preprocessed_df
         self._broker = partial(Broker, assets=assets, fee=fee)
         self.lookback_window = lookback_window
         self.action_space = spaces.Discrete(3)
-        self.state_size = 7  # OHLCV, assets, position profit or lostt
-        self.observation_space = spaces.Box(low=0, high=np.inf, shape=(self.lookback_window * self.state_size,))
+        self.state_size = len(self._preprocessed_df.columns) + 2  # OHLCV, assets, position profit or loss
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.lookback_window * self.state_size,))
 
         self.initial_assets = assets
         self.current_step: int = 0
 
     def reset(self):
         self.current_step = self.lookback_window
-        self.begin_assets = self.initial_assets
+        self.prev_assets = self.initial_assets
         self.broker: Broker = self._broker(data=self._df)
 
-        self.market_state = self.broker.get_candles(0, self.lookback_window)
+        self.market_state = self._preprocessed_df.iloc[: self.lookback_window, :]
         self.account_state = np.tile(self.broker.account_state, (self.lookback_window, 1))
 
         self._state = np.concatenate((self.market_state, self.account_state), axis=1)
@@ -53,8 +54,10 @@ class TradingEnv(gym.Env):
 
         self.update_state()
 
-        self.reward = self.calc_reward()  # Todo: change clip reward
+        current_assets = self.broker.assets + self.broker.position.profit_or_loss
+        self.reward = (current_assets - self.prev_assets) / self.prev_assets
 
+        self.prev_assets = current_assets
         self.current_step += 1
         return self.state, self.reward, self.done, {}
 
@@ -82,6 +85,10 @@ class TradingEnv(gym.Env):
         elif self.broker.position.size > 0:  # If you have position, then positon close
             self.broker.new_order(-self.broker.position.size, self.broker.current_price)
 
+    def update_state(self):
+        self._state[:-1, :] = self._state[1:, :]
+        self._state[-1, :] = np.concatenate((self._preprocessed_df.iloc[self.current_step, :], self.broker.account_state))
+
     @property
     def is_terminal(self):
         return True if self.current_step + 1 == len(self._df) or self.broker.assets < self.broker.current_price else False
@@ -89,12 +96,3 @@ class TradingEnv(gym.Env):
     @property
     def state(self) -> np.ndarray:
         return self._state.reshape(self.lookback_window * self.state_size)
-
-    def update_state(self):
-        self._state[:-1, :] = self._state[1:, :]
-        self._state[-1, :] = np.concatenate((self.broker.latest_candle, self.broker.account_state))
-
-    def calc_reward(self):
-        current_assets = self.broker.assets + self.broker.position.profit_or_loss
-        reward = current_assets - self.begin_assets
-        return reward
