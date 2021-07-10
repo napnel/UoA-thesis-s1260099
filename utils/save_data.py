@@ -46,9 +46,8 @@ def save_data(num=5, aggregate=1, fsym="BTC", tsym="USD"):
     for i in range(num):
         date = base_date - timedelta(days=i)
         limit = (60 * 24) / aggregate
-        chart = fetch_chart("minute", limit=limit, toTs=int(datetime.timestamp(date)), fsym=fsym, tsym=tsym, aggregate=aggregate)
-        # chart = convert_timeframe(chart, "5T")
-        chart.to_csv(f"{base_dir}test_data_{date.strftime('%Y-%m-%d')}.csv")
+        chart = fetch_chart("minute", limit=limit, toTs=int(datetime.timestamp(date)), fsym=fsym, tsym=tsym, aggregate=aggregate)[:-1]
+        chart.to_csv(f"{base_dir}test_data_{date.strftime('%Y-%m-%d')}.csv", mode="x")
 
 
 def convert_timeframe(chart: pd.DataFrame, rule: str) -> pd.DataFrame:
