@@ -27,13 +27,18 @@ class Broker:
     def get_candles(self, start, end) -> np.ndarray:
         return self.data.iloc[start:end, :].values
 
-    @property
-    def free_assets(self):
-        return self.assets - abs(self.position.size) * self.current_price
+    def adjusted_price(self, size, price):
+        return price * (1 + copysign(self.fee, size))
 
     @property
     def equity(self):
         return self.assets + self.position.profit_or_loss
+
+    @property
+    def free_assets(self):
+        used_assets = abs(self.position.size) * self.current_price
+        return max(0, self.equity - used_assets)
+        # return self.equity if self.position.size == 0 else max(0, self.equity - abs(self.position.size) * self.current_price)
 
     @property
     def latest_candle(self) -> np.ndarray:
@@ -49,7 +54,7 @@ class Broker:
 
     @property
     def account_state(self) -> np.ndarray:
-        return np.array([self.free_assets > self.current_price, self.position.profit_or_loss_pct])
+        return np.array([self.free_assets > (self.current_price * (1 + self.fee)), self.position.profit_or_loss_pct])
 
 
 class Position:
