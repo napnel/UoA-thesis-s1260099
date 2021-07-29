@@ -24,12 +24,6 @@ class Broker:
                 assert self.position.size == -size, f"position don't close: {self.position.size}, {size}"
                 self.position.close()
 
-    def get_candles(self, start, end) -> np.ndarray:
-        return self.data.iloc[start:end, :].values
-
-    def adjusted_price(self, size, price):
-        return price * (1 + copysign(self.fee, size))
-
     @property
     def equity(self):
         return self.assets + self.position.profit_or_loss
@@ -38,11 +32,6 @@ class Broker:
     def free_assets(self):
         used_assets = abs(self.position.size) * self.current_price
         return max(0, self.equity - used_assets)
-        # return self.equity if self.position.size == 0 else max(0, self.equity - abs(self.position.size) * self.current_price)
-
-    @property
-    def latest_candle(self) -> np.ndarray:
-        return self.data.iloc[self.current_step, :].values
 
     @property
     def current_datetime(self):
@@ -60,56 +49,32 @@ class Broker:
 class Position:
     def __init__(self, broker: Broker):
         self.__broker = broker
-        self.__size = 0
-        self.__entry_price = None
-        self.__entry_time = None
+        self.size = 0
+        self.entry_price = None
+        self.entry_time = None
 
     def __repr__(self) -> str:
         return f"Position(size: {self.size}, entry_price: {self.entry_price}, pl: {self.profit_or_loss:.0f})"
 
     @property
-    def size(self) -> float:
-        return self.__size
-
-    @property
-    def entry_price(self) -> float:
-        return self.__entry_price
-
-    @property
-    def entry_time(self):
-        return self.__entry_time
-
-    @size.setter
-    def size(self, size):
-        self.__size = size
-
-    @entry_price.setter
-    def entry_price(self, price):
-        self.__entry_price = price
-
-    @entry_time.setter
-    def entry_time(self, time):
-        self.__entry_time = time
-
-    @property
     def is_long(self) -> bool:
-        return True if self.__size > 0 else False
+        return True if self.size > 0 else False
 
     @property
     def is_short(self) -> bool:
-        return True if self.__size < 0 else False
+        return True if self.size < 0 else False
 
     @property
     def profit_or_loss(self):
-        if self.__size == 0:
+        if self.size == 0:
             return 0
-        return self.__size * (self.__broker.current_price - self.__entry_price)
+        return self.size * (self.__broker.current_price - self.entry_price)
 
     @property
     def profit_or_loss_pct(self):
-        if self.__size == 0:
+        if self.size == 0:
             return 0
-        return copysign(1, self.__size) * (self.__broker.current_price - self.__entry_price) / self.__entry_price
+        return copysign(1, self.size) * (self.__broker.current_price - self.entry_price) / self.entry_price
 
     def close(self):
         self.__broker.assets += self.profit_or_loss
@@ -122,6 +87,6 @@ class Position:
             "exit_time": self.__broker.current_datetime,
         }
         self.__broker.closed_trades = self.__broker.closed_trades.append(trade, ignore_index=True)
-        self.__size = 0
-        self.__entry_price = None
-        self.__entry_time = None
+        self.size = 0
+        self.entry_price = None
+        self.entry_time = None

@@ -18,7 +18,7 @@ class TradingEnv(gym.Env):
         self.lookback_window = lookback_window
         self.action_space = spaces.Discrete(3)
         self.state_size = len(self._preprocessed_df.columns) + 2  # OHLCV, assets, position profit or loss
-        self.observation_space = spaces.Box(low=-1, high=1, shape=(self.lookback_window * self.state_size,))
+        self.observation_space = spaces.Box(low=-1, high=1, shape=(self.lookback_window, self.state_size))
 
         self.initial_assets = assets
         self.current_step: int = 0
@@ -31,7 +31,7 @@ class TradingEnv(gym.Env):
         self.market_state = self._preprocessed_df.iloc[: self.lookback_window, :]
         self.account_state = np.tile(self.broker.account_state, (self.lookback_window, 1))
 
-        self._state = np.concatenate((self.market_state, self.account_state), axis=1)
+        self.state = np.concatenate((self.market_state, self.account_state), axis=1)
         return self.state
 
     def step(self, action):
@@ -73,14 +73,14 @@ class TradingEnv(gym.Env):
         self.np_random, seed = gym.utils.seeding.np_random(seed)
         return [seed]
 
-    def buy(self):
+    def buy(self, size=1):
         if self.broker.position.size == 0:
             size = self.broker.free_assets // (self.broker.current_price * (1 + self.broker.fee))
             self.broker.new_order(size, self.broker.current_price)
         elif self.broker.position.size < 0:  # If you have position, then positon close
             self.broker.new_order(-self.broker.position.size, self.broker.current_price)
 
-    def sell(self):
+    def sell(self, size=1):
         if self.broker.position.size == 0:
             size = self.broker.free_assets // (self.broker.current_price * (1 + self.broker.fee))
             self.broker.new_order(-size, self.broker.current_price)
@@ -88,13 +88,12 @@ class TradingEnv(gym.Env):
             self.broker.new_order(-self.broker.position.size, self.broker.current_price)
 
     def update_state(self):
-        self._state[:-1, :] = self._state[1:, :]
-        self._state[-1, :] = np.concatenate((self._preprocessed_df.iloc[self.current_step, :], self.broker.account_state))
+        self.state[:-1, :] = self.state[1:, :]
+        self.state[-1, :] = np.concatenate((self._preprocessed_df.iloc[self.current_step, :], self.broker.account_state))
+
+    def _calculate_reward(self):
+        pass
 
     @property
     def is_terminal(self):
         return True if self.current_step + 1 == len(self._df) or self.broker.assets < self.broker.current_price else False
-
-    @property
-    def state(self) -> np.ndarray:
-        return self._state.reshape(self.lookback_window * self.state_size)

@@ -59,7 +59,8 @@ def preprocessing(candles: pd.DataFrame) -> pd.DataFrame:
     df["diff_ema20_pct"] = (price - ema20) / ema20
     df["diff_ema50_pct"] = (price - ema50) / ema50
     df["diff_ema200_pct"] = (price - ema200) / ema200
-    df["diff_volume_pct"] = volume.pct_change(1)
+    # df["diff_volume_pct"] = volume.pct_change(1)
+    df["diff_log_volume"] = np.log(volume.shift(1)) - np.log(volume)
     df = df.fillna(0)
     return df
 
