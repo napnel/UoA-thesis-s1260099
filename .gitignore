@@ -131,6 +131,9 @@ dmypy.json
 # User
 .vscode
 *.zip
-notebook
+# notebook
 *.html
 data
+logs
+memo.md
+references
