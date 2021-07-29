@@ -1,9 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-
-from utils import load_data
-
+import seaborn as sns
 
 from ta.trend import EMAIndicator, ema_indicator
 from sklearn.preprocessing import scale
@@ -66,12 +64,14 @@ def preprocessing(candles: pd.DataFrame) -> pd.DataFrame:
 
 
 def main():
-    df = load_data("./data/ETHUSD/15", limit_days=5)
+    df = pd.read_csv("./data/3600/ethusd/2021-01-01.csv", parse_dates=[0]).set_index("Date")
     print(df.head(3))
 
     tmp = preprocessing(df)
-    print(tmp.head(5))
+    print(tmp.head(50))
     tmp.hist()
+    # sns.histplot(tmp)
+    # tmp.hist()
     plt.show()
 
 

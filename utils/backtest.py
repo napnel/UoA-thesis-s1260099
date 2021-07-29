@@ -1,9 +1,15 @@
+from enum import Enum
 import warnings
 from bokeh.util.warnings import BokehDeprecationWarning
 
 warnings.simplefilter("ignore", BokehDeprecationWarning)
 warnings.simplefilter("ignore", UserWarning)
 from backtesting import Strategy, Backtest
+
+
+class Actions(Enum):
+    Sell = 0
+    Buy = 1
 
 
 class DRLStrategy(Strategy):
@@ -17,43 +23,36 @@ class DRLStrategy(Strategy):
     def next(self):
         self.step = len(self.data.df) - 1
         self.env.current_step = self.step  # BacktestのステップとEnvironmentのステップを同期させる
-        self.env.broker.current_step = self.step
 
-        if self.step < self.env.lookback_window or self.env.is_terminal:
+        if self.step < self.env.window_size:
             return
 
-        self.env.update_state()
-        assert self._broker._cash == self.env.broker.assets, f"Step:{self.step}/{self.max_step}: {self._broker._cash} != {self.env.broker.assets}"
-        assert self.equity == self.env.broker.equity, f"Step{self.step}/{self.max_step}: {self.equity} != {self.env.broker.equity}"
+        assert self._broker._cash == self.env.wallet.assets, f"Step:{self.step}/{self.max_step}: {self._broker._cash} != {self.env.wallet.assets}"
+        assert self.equity == self.env.wallet.equity, f"Step{self.step}/{self.max_step}: {self.equity} != {self.env.wallet.equity}"
 
-        if self.step + 1 == self.max_step:
-            self.env.broker.position.close()
+        if self.step == self.max_step:
+            self.env.position.close()
+            return
 
-        action, _ = self.model.predict(self.env.state)
-        if action == 0:
-            pass
+        action, _ = self.model.predict(self.env.next_observation)
 
-        elif action == 1 and not self.position.is_long:
+        if action == Actions.Buy.value and not self.position.is_long:
             if self.position.is_short:
                 self.position.close()
             else:
-                size = self._broker.margin_available // (self._broker.last_price * (1 + self._broker._commission))
-                if size != 0:
-                    self.buy(size=size)
+                self.buy()
             self.env.buy()
 
-        elif action == 2 and not self.position.is_short:
+        elif action == Actions.Sell.value and not self.position.is_short:
             if self.position.is_long:
                 self.position.close()
             else:
-                size = self._broker.margin_available // (self._broker.last_price * (1 + self._broker._commission))
-                if size != 0:
-                    self.sell(size=size)
+                self.sell()
             self.env.sell()
 
 
-def backtest(model, env, assets, fee, plot=False, plot_filename=None):
-    bt = Backtest(env._df, DRLStrategy, cash=assets, commission=fee, trade_on_close=True, exclusive_orders=False)
+def backtest(model, env, plot=False, plot_filename=None):
+    bt = Backtest(env._df, DRLStrategy, cash=env.wallet.initial_assets, commission=env.fee, trade_on_close=True, exclusive_orders=False)
     stats = bt.run(model=model, env=env)
     if plot:
         bt.plot(filename=plot_filename)
