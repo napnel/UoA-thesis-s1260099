@@ -1,19 +1,17 @@
-from enum import Enum
 import warnings
+import pandas as pd
+from typing import Optional
+
 from bokeh.util.warnings import BokehDeprecationWarning
 
 warnings.simplefilter("ignore", BokehDeprecationWarning)
 warnings.simplefilter("ignore", UserWarning)
 from backtesting import Strategy, Backtest
-
-
-class Actions(Enum):
-    Sell = 0
-    Buy = 1
+from stable_baselines3.common.base_class import BaseAlgorithm
 
 
 class DRLStrategy(Strategy):
-    model = None
+    model: Optional[BaseAlgorithm] = None
     env = None
 
     def init(self):
@@ -34,16 +32,16 @@ class DRLStrategy(Strategy):
             self.env.position.close()
             return
 
-        action, _ = self.model.predict(self.env.next_observation)
+        action, _ = self.model.predict(self.env.next_observation, deterministic=True)
 
-        if action == Actions.Buy.value and not self.position.is_long:
+        if action == self.env.actions.Buy.value and not self.position.is_long:
             if self.position.is_short:
                 self.position.close()
             else:
                 self.buy()
             self.env.buy()
 
-        elif action == Actions.Sell.value and not self.position.is_short:
+        elif action == self.env.actions.Sell.value and not self.position.is_short:
             if self.position.is_long:
                 self.position.close()
             else:
@@ -51,7 +49,7 @@ class DRLStrategy(Strategy):
             self.env.sell()
 
 
-def backtest(model, env, plot=False, plot_filename=None):
+def backtest(model: BaseAlgorithm, env, plot=False, plot_filename=None) -> pd.DataFrame:
     bt = Backtest(env._df, DRLStrategy, cash=env.wallet.initial_assets, commission=env.fee, trade_on_close=True, exclusive_orders=False)
     stats = bt.run(model=model, env=env)
     if plot:
