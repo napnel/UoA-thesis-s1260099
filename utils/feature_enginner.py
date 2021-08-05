@@ -15,6 +15,8 @@ class FeatureEngineer:
 
         # To do: 外れ値の除去
 
+        # To do: split train test data
+
         # 特徴抽出
         features = self.extract_features(data)
 

@@ -4,8 +4,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from ta.trend import EMAIndicator, ema_indicator
-from sklearn.preprocessing import scale
-from sklearn.preprocessing import StandardScaler
 
 
 def normalizing(df):
@@ -24,7 +22,7 @@ def normalizing(df):
         normalized_df[column] = (normalized_df[column] - min_value) / (max_value - min_value)
 
     return normalized_df
-
+    
 
 def add_indicators(df) -> pd.DataFrame:
     indicators = pd.DataFrame()
