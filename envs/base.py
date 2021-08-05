@@ -1,4 +1,3 @@
-from argparse import Action
 import gym
 import numpy as np
 import pandas as pd
@@ -73,34 +72,39 @@ class Wallet:
         return self.assets + self.__env.position.profit_or_loss
 
     @property
+    def equity_pct(self) -> float:
+        return (self.equity - self.initial_assets) / (self.initial_assets)
+
+    @property
     def free_assets(self) -> float:
         used_assets = abs(self.__env.position.size) * self.__env.current_price
         return max(0, self.equity - used_assets)
 
 
 class BaseTradingEnv(gym.Env):
-    def __init__(self, df: pd.DataFrame, preprocessed_df: pd.DataFrame, window_size: int, fee: float, actions: Enum = Actions):
+    def __init__(self, df: pd.DataFrame, features: pd.DataFrame, window_size: int, fee: float, actions: Enum = Actions):
         self._df = df.copy()
-        self._preprocessed_df = preprocessed_df
+        self.features = features
         self.fee = fee
         self.window_size = window_size
         self.actions = actions
         self.action_space = spaces.Discrete(len(actions))
-        self.observation_size = len(self._preprocessed_df.columns)  # positionの情報を持つか検討する
+        self.observation_size = len(self.features.columns)  # positionの情報を持つか検討する
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.window_size, self.observation_size))
+
         self.current_step = 0
         self.position: Optional[Position] = None
         self.wallet: Optional[Wallet] = None
         self.closed_trades: Optional[pd.DataFrame] = None
+        self.historical_info: Optional[pd.DataFrame] = None
 
     def reset(self):
         self.current_step = self.window_size
         self.position = Position(self)
         self.wallet = Wallet(self)
-        self.observation = self._preprocessed_df.iloc[: self.window_size, :].values
-        self.prev_profit_or_loss_pct = 0
-        self.prev_equity = self.wallet.equity
+        self.observation = self.features.iloc[: self.window_size, :].values
         self.closed_trades = pd.DataFrame(columns=["Size", "EntryPrice", "ExitPrice", "PnL", "ReturnPct", "EntryTime", "ExitTime"])
+        self.historical_info = pd.DataFrame(columns=["Equity [%]"])
         return self.observation
 
     def step(self, action):
@@ -118,10 +122,10 @@ class BaseTradingEnv(gym.Env):
 
         self.observation = self.next_observation
         self.reward = self._calculate_reward()
-        self.info = {}
 
-        self.prev_profit_or_loss_pct = self.position.profit_or_loss_pct
-        self.prev_equity = self.wallet.equity
+        self.historical_info.append([self.wallet.equity_pct])
+        self.info = self.historical_info.tail(1).to_dict()
+
         self.current_step += 1
         return self.observation, self.reward, self.done, self.info
 
@@ -157,7 +161,7 @@ class BaseTradingEnv(gym.Env):
 
     @property
     def next_observation(self):
-        return self._preprocessed_df[self.current_step - self.window_size + 1 : self.current_step + 1].values
+        return self.features[self.current_step - self.window_size + 1 : self.current_step + 1].values
 
     @property
     def current_price(self):
@@ -167,12 +171,3 @@ class BaseTradingEnv(gym.Env):
     def current_datetime(self):
         return self._df.iloc[self.current_step, :].name
 
-
-class SimpleTradingEnv(BaseTradingEnv):
-    def __init__(self, df: pd.DataFrame, preprocessed_df: pd.DataFrame, window_size: int, fee: float):
-        super().__init__(df, preprocessed_df, window_size, fee)
-
-    def _calculate_reward(self):
-        reward = self.position.profit_or_loss_pct - self.prev_profit_or_loss_pct * 100
-        self.prev_profit_or_loss_pct = self.position.profit_or_loss_pct
-        return reward
