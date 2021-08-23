@@ -10,6 +10,7 @@ from typing import Optional
 class Actions(Enum):
     Sell = 0
     Buy = 1
+    Hold = 2
 
 
 class Position:
@@ -82,7 +83,9 @@ class Wallet:
 
 
 class BaseTradingEnv(gym.Env):
-    def __init__(self, df: pd.DataFrame, features: pd.DataFrame, window_size: int, fee: float, actions: Enum = Actions):
+    def __init__(self, df: pd.DataFrame, features: pd.DataFrame, window_size: int = 20, fee: float = 0.001, actions: Enum = Actions):
+        '''
+        '''
         self._df = df.copy()
         self.features = features
         self.fee = fee
@@ -93,8 +96,8 @@ class BaseTradingEnv(gym.Env):
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.window_size, self.observation_size))
 
         self.current_step = 0
-        self.position: Optional[Position] = None
-        self.wallet: Optional[Wallet] = None
+        self.position: Optional[Position] = Wallet(self)
+        self.wallet: Optional[Wallet] = Position(self)
         self.closed_trades: Optional[pd.DataFrame] = None
         self.historical_info: Optional[pd.DataFrame] = None
 
@@ -170,4 +173,3 @@ class BaseTradingEnv(gym.Env):
     @property
     def current_datetime(self):
         return self._df.iloc[self.current_step, :].name
-

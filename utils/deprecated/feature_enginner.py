@@ -13,8 +13,8 @@ class FeatureEngineer:
     def __init__(self, data_train: pd.DataFrame, data_val: pd.DataFrame, data_test: Optional[pd.DataFrame] = None, norm_method: str = "standard"):
         self.entire_raw: Dict[Optional[pd.DataFrame]] = {
             "train": data_train.copy(),
-            "val": data_val.copy() if data_val else None,
-            "test": data_test.copy() if data_test else None,
+            "val": data_val.copy() if data_val is not None else None,
+            "test": data_test.copy() if data_test is not None else None,
         }
         self.entire_data: Dict[Optional[pd.DataFrame]] = {"train": None, "val": None, "test": None}
         self.entire_features: Dict[Optional[pd.DataFrame]] = {"train": None, "val": None, "test": None}
@@ -56,7 +56,10 @@ class FeatureEngineer:
 
     def extract_features(self, data: pd.DataFrame):
         features = pd.DataFrame()
-        features["Price Log Diff"] = np.log(data["Close"].shift(1)) - np.log(data["Close"])
+        features["Open Log Diff"] = np.log(data["Close"]) - np.log(data["Open"])
+        features["High Log Diff"] = np.log(data["Close"]) - np.log(data["High"])
+        features["Low Log Diff"] = np.log(data["Close"]) - np.log(data["Low"])
+        features["Close Log Diff"] = np.log(data["Close"].shift(1)) - np.log(data["Close"])
         features["Volume Log Diff"] = np.log(data["Volume"].shift(1)) - np.log(data["Volume"])
 
         # Trend Indicators
@@ -69,21 +72,24 @@ class FeatureEngineer:
 
         # Oscillator Indicator
         rsi = RSIIndicator(data["Close"], window=14).rsi()
-        features["RSI"] = rsi / 100.0
+        features["RSI"] = rsi
 
         # Volatility Indicator
-        bb_sigma_1 = BollingerBands(data["Close"], window=20, window_dev=1)
-        bb_sigma_2 = BollingerBands(data["Close"], window=20, window_dev=2)
-        features["BB Sigma-1 Upper Bound"] = np.log(data["Close"]) - np.log(bb_sigma_1.bollinger_hband())
-        features["BB Sigma-1 Lower Bound"] = np.log(data["Close"]) - np.log(bb_sigma_1.bollinger_lband())
-        features["BB Sigma-2 Upper Bound"] = np.log(data["Close"]) - np.log(bb_sigma_2.bollinger_hband())
-        features["BB Sigma-2 Lower Bound"] = np.log(data["Close"]) - np.log(bb_sigma_2.bollinger_lband())
+        # bb_sigma_1 = BollingerBands(data["Close"], window=20, window_dev=1)
+        # bb_sigma_2 = BollingerBands(data["Close"], window=20, window_dev=2)
+        # features["BB Sigma-1 Upper Bound"] = np.log(data["Close"]) - np.log(bb_sigma_1.bollinger_hband())
+        # features["BB Sigma-1 Lower Bound"] = np.log(data["Close"]) - np.log(bb_sigma_1.bollinger_lband())
+        # features["BB Sigma-2 Upper Bound"] = np.log(data["Close"]) - np.log(bb_sigma_2.bollinger_hband())
+        # features["BB Sigma-2 Lower Bound"] = np.log(data["Close"]) - np.log(bb_sigma_2.bollinger_lband())
 
         return features.dropna()
 
     def normalizing(self, data: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(self.scaler.transform(data), index=data.index, columns=data.columns)
 
+
+    def get_features_train(self, type: str = 'normalized_features'):
+        return self.entire_normalized_features['train']
 
 def main():
     import matplotlib.pyplot as plt

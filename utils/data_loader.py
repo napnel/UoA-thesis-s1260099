@@ -1,5 +1,7 @@
 import pandas as pd
 import yfinance as yf
+from typing import Optional
+
 
 class DataLoader:
     @classmethod
@@ -12,16 +14,21 @@ class DataLoader:
         return df.loc[start:end, :]
 
     @classmethod
-    def fetch_data(self, ticker: str, start: str, end: str, interval: str = "1d", save=True) -> pd.DataFrame:
+    def fetch_data(self, ticker: str, start: Optional[str] = None, end: Optional[str] = None, interval: str = "1d"):
         """
-        if interval is 1h: you can only fetch 730 days.
-        if interval is 15m: you can only fetch 60 days.
+        Feath historical data (OHLCV) using Yahoo Finance API.
+
+        param ticker: ex) MSFT, ^N255, BTC-USD,
+        param start: ex) Download start date string (YYYY-MM-DD) or _datetime. Default is 1900-01-01
+        param end: ex) Download end date string (YYYY-MM-DD) or _datetime. Default is now
+        param interval: Valid intervals: 1m,2m,5m,15m,30m,60m,90m,1h,1d,5d,1wk,1mo,3mo Intraday data cannot
         """
-        data = yf.download(ticker, start=start, end=end, interval=interval)
-        data = data.reset_index().rename(columns={"index": "Date"})
+        data = yf.download(ticker, start=start, end=end, interval=interval, auto_adjust=True)
         if interval != "1d":
+            data = data.reset_index().rename(columns={"index": "Date"})
             data["Date"] = data["Date"].apply(lambda x: x.strftime("%Y-%m-%d %H:%M"))
-        data["Close"] = data["Adj Close"]
-        data = data.drop(["Adj Close"], axis=1)
-        data = data.set_index("Date")
+            data = data.set_index("Date")
+
+        assert data.index.name == "Date"
+        assert list(data.columns.values) == ["Open", "High", "Low", "Close", "Volume"]
         return data

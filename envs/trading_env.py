@@ -1,14 +1,10 @@
-import pandas as pd
-
 from .base import BaseTradingEnv
 
 
-class SimpleTradingEnv(BaseTradingEnv):
-    def __init__(self, df: pd.DataFrame, features: pd.DataFrame, window_size: int, fee: float):
-        super().__init__(df, features, window_size, fee)
-
+class TradingEnv(BaseTradingEnv):
     def _calculate_reward(self):
-        reward = 0
+        # reward = 0.0
+        reward = self.position.profit_or_loss_pct
         if self.closed_trades.empty:
             return reward
 
