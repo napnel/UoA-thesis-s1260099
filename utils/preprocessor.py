@@ -6,12 +6,6 @@ import pandas as pd
 from ta.trend import SMAIndicator, MACD
 from ta.momentum import RSIIndicator
 from ta.volatility import BollingerBands
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
-
-
-# Todo
-# このクラスは特徴量だけを抽出するクラスにする
-# 交差検証のことを考えると、ここでデータ分割してしまうと拡張性が失われる
 
 
 class Preprocessor:
@@ -22,7 +16,7 @@ class Preprocessor:
 
     @classmethod
     def extract_features(self, data: pd.DataFrame):
-        features = pd.DataFrame()
+        features = pd.DataFrame(index=data.index)
         features["Open Log Diff"] = np.log(data["Close"]) - np.log(data["Open"])
         features["High Log Diff"] = np.log(data["Close"]) - np.log(data["High"])
         features["Low Log Diff"] = np.log(data["Close"]) - np.log(data["Low"])
@@ -42,10 +36,7 @@ class Preprocessor:
         features["RSI"] = rsi
 
         # Volatility Indicator
-        bb_sigma_1 = BollingerBands(data["Close"], window=20, window_dev=1)
         bb_sigma_2 = BollingerBands(data["Close"], window=20, window_dev=2)
-        features["BB Sigma-1 Upper Bound"] = np.log(data["Close"]) - np.log(bb_sigma_1.bollinger_hband())
-        features["BB Sigma-1 Lower Bound"] = np.log(data["Close"]) - np.log(bb_sigma_1.bollinger_lband())
         features["BB Sigma-2 Upper Bound"] = np.log(data["Close"]) - np.log(bb_sigma_2.bollinger_hband())
         features["BB Sigma-2 Lower Bound"] = np.log(data["Close"]) - np.log(bb_sigma_2.bollinger_lband())
 
@@ -53,9 +44,9 @@ class Preprocessor:
 
     @classmethod
     def align_date(self, data: pd.DataFrame, features: pd.DataFrame):
-        features = features.dropna()
-        data = data.loc[features.index[0] :, :]
-        assert len(data) == len(features)
+        features = features.dropna(axis=0)
+        data = data.loc[features.index[0] :, :].dropna(axis=0)
+        assert len(data) == len(features), f"data length: {len(data)}, features length: {len(features)}"
         return data, features
 
 

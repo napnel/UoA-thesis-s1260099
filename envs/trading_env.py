@@ -1,4 +1,4 @@
-from .base import BaseTradingEnv
+from .base_env import BaseTradingEnv
 
 
 class TradingEnv(BaseTradingEnv):

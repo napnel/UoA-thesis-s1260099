@@ -84,8 +84,7 @@ class Wallet:
 
 class BaseTradingEnv(gym.Env):
     def __init__(self, df: pd.DataFrame, features: pd.DataFrame, window_size: int = 20, fee: float = 0.001, actions: Enum = Actions):
-        '''
-        '''
+        """ """
         self._df = df.copy()
         self.features = features
         self.fee = fee
@@ -96,8 +95,8 @@ class BaseTradingEnv(gym.Env):
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.window_size, self.observation_size))
 
         self.current_step = 0
-        self.position: Optional[Position] = Wallet(self)
-        self.wallet: Optional[Wallet] = Position(self)
+        self.position: Optional[Position] = Position(self)
+        self.wallet: Optional[Wallet] = Wallet(self)
         self.closed_trades: Optional[pd.DataFrame] = None
         self.historical_info: Optional[pd.DataFrame] = None
 
