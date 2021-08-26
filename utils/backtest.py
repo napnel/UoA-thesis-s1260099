@@ -3,9 +3,6 @@ import pandas as pd
 from typing import Optional
 
 from bokeh.util.warnings import BokehDeprecationWarning
-
-warnings.simplefilter("ignore", BokehDeprecationWarning)
-warnings.simplefilter("ignore", UserWarning)
 from backtesting import Strategy, Backtest
 from stable_baselines3.common.base_class import BaseAlgorithm
 
@@ -50,15 +47,18 @@ class DRLStrategy(Strategy):
 
 
 def backtest(model: BaseAlgorithm, env, plot=False, plot_filename=None) -> pd.DataFrame:
-    bt = Backtest(
-        env._df,
-        DRLStrategy,
-        cash=env.wallet.initial_assets,
-        commission=env.fee,
-        trade_on_close=True,
-        exclusive_orders=False,
-    )
-    stats = bt.run(model=model, env=env)
-    if plot:
-        bt.plot(filename=plot_filename)
-    return stats
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", BokehDeprecationWarning)
+        warnings.simplefilter("ignore", UserWarning)
+        bt = Backtest(
+            env._df,
+            DRLStrategy,
+            cash=env.wallet.initial_assets,
+            commission=env.fee,
+            trade_on_close=True,
+            exclusive_orders=False,
+        )
+        stats = bt.run(model=model, env=env)
+        if plot:
+            bt.plot(filename=plot_filename)
+        return stats

@@ -1,11 +1,10 @@
-from cgi import test
-from ctypes import Union
-from typing import Dict, Tuple, Optional
+import warnings
 import numpy as np
 import pandas as pd
-from ta.trend import SMAIndicator, MACD
-from ta.momentum import RSIIndicator
-from ta.volatility import BollingerBands
+from ta.trend import sma_indicator, MACD, ADXIndicator
+from ta.momentum import RSIIndicator, StochRSIIndicator
+from ta.volatility import BollingerBands, AverageTrueRange
+from ta.volume import money_flow_index, MFIIndicator, chaikin_money_flow
 
 
 class Preprocessor:
@@ -17,30 +16,55 @@ class Preprocessor:
     @classmethod
     def extract_features(self, data: pd.DataFrame):
         features = pd.DataFrame(index=data.index)
-        features["Open Log Diff"] = np.log(data["Close"]) - np.log(data["Open"])
-        features["High Log Diff"] = np.log(data["Close"]) - np.log(data["High"])
-        features["Low Log Diff"] = np.log(data["Close"]) - np.log(data["Low"])
-        features["Close Log Diff"] = np.log(data["Close"].shift(1)) - np.log(data["Close"])
-        features["Volume Log Diff"] = np.log(data["Volume"].shift(1)) - np.log(data["Volume"])
 
         # Trend Indicators
-        sma20 = SMAIndicator(data["Close"], window=20).sma_indicator()
-        sma50 = SMAIndicator(data["Close"], window=50).sma_indicator()
         macd = MACD(data["Close"], window_slow=26, window_fast=12, window_sign=9)
-        features["SMA-20 Log Diff"] = np.log(data["Close"]) - np.log(sma20)
-        features["SMA-50 Log Diff"] = np.log(data["Close"]) - np.log(sma50)
+        adx = ADXIndicator(data["High"], data["Low"], data["Close"], window=14)
+        features["DMI_Diff"] = adx.adx_pos() - adx.adx_neg()
         features["MACD"] = macd.macd_diff()
 
         # Oscillator Indicator
         rsi = RSIIndicator(data["Close"], window=14).rsi()
         features["RSI"] = rsi
 
-        # Volatility Indicator
-        bb_sigma_2 = BollingerBands(data["Close"], window=20, window_dev=2)
-        features["BB Sigma-2 Upper Bound"] = np.log(data["Close"]) - np.log(bb_sigma_2.bollinger_hband())
-        features["BB Sigma-2 Lower Bound"] = np.log(data["Close"]) - np.log(bb_sigma_2.bollinger_lband())
-
+        # Volume Indicator
+        features["MFI"] = money_flow_index(data["High"], data["Low"], data["Close"], data["Volume"], window=14)
+        features["CMF"] = chaikin_money_flow(data["High"], data["Low"], data["Close"], data["Volume"])
         return features
+
+    @classmethod
+    def extract_features_v2(self, data: pd.DataFrame):
+        features = pd.DataFrame(index=data.index)
+
+        log_close = data["Close"].apply(np.log1p)
+        log_volume = data["Volume"].apply(np.log1p)
+
+        # Return
+        features["return_1"] = log_close.diff()
+        features["return_5"] = log_close.diff(5)
+        features["return_20"] = log_close.diff(20)
+        features["return_40"] = log_close.diff(40)
+        features["return_60"] = log_close.diff(60)
+
+        # Volume
+        features["volume_1"] = log_volume
+        features["volume_5"] = log_volume.rolling(5).mean()
+        features["volume_20"] = log_volume.rolling(20).mean()
+        features["volume_40"] = log_volume.rolling(40).mean()
+        features["volume_60"] = log_volume.rolling(60).mean()
+
+        # Volatility
+        features["volatility_5"] = features["return_1"].rolling(5).std()
+        features["volatility_20"] = features["return_1"].rolling(20).std()
+        features["volatility_40"] = features["return_1"].rolling(40).std()
+        features["volatility_60"] = features["return_1"].rolling(60).std()
+
+        # Ratio of Moving Average
+        features["ma_gap_5"] = log_close - (log_close.rolling(5).mean())
+        features["ma_gap_20"] = log_close - (log_close.rolling(20).mean())
+        features["ma_gap_40"] = log_close - (log_close.rolling(40).mean())
+        features["ma_gap_60"] = log_close - (log_close.rolling(60).mean())
+        return features.astype(np.float16)
 
     @classmethod
     def align_date(self, data: pd.DataFrame, features: pd.DataFrame):
