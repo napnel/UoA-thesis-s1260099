@@ -3,6 +3,15 @@ import random
 import numpy as np
 import pandas as pd
 import torch
+import requests
+from dotenv import load_dotenv
+from stable_baselines3 import PPO, A2C, DQN
+
+ALGOS = {
+    "a2c": A2C,
+    "dqn": DQN,
+    "ppo": PPO,
+}
 
 
 def reduce_mem_usage(df):
@@ -44,10 +53,25 @@ def reduce_mem_usage(df):
     return df
 
 
-def fixed_seed(seed=0):
+def set_random_seed(seed=0):
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
+
+
+def send_line_notification(message):
+    """
+    If you have line notify token and make .env file in utils folder, send message to LINE
+    """
+    load_dotenv(verbose=True)
+    dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
+    load_dotenv(dotenv_path)
+    line_notify_token = os.environ.get("LINE_NOTIFY_TOKEN")
+    print(line_notify_token)
+    endpoint = "https://notify-api.line.me/api/notify"
+    payload = {"message": f"\n{message}"}
+    headers = {"Authorization": f"Bearer {line_notify_token}"}
+    requests.post(endpoint, data=payload, headers=headers)
