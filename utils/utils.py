@@ -5,13 +5,6 @@ import pandas as pd
 import torch
 import requests
 from dotenv import load_dotenv
-from stable_baselines3 import PPO, A2C, DQN
-
-ALGOS = {
-    "a2c": A2C,
-    "dqn": DQN,
-    "ppo": PPO,
-}
 
 
 def reduce_mem_usage(df):
@@ -70,7 +63,6 @@ def send_line_notification(message):
     dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
     load_dotenv(dotenv_path)
     line_notify_token = os.environ.get("LINE_NOTIFY_TOKEN")
-    print(line_notify_token)
     endpoint = "https://notify-api.line.me/api/notify"
     payload = {"message": f"\n{message}"}
     headers = {"Authorization": f"Bearer {line_notify_token}"}
