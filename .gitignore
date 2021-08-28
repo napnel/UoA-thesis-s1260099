@@ -131,9 +131,11 @@ dmypy.json
 # User
 .vscode
 *.zip
-# notebook
 *.html
 data
 logs
 memo.md
 references
+*.pickle
+botter
+notebook
