@@ -1,10 +1,15 @@
 import os
 import random
+import requests
+
 import numpy as np
 import pandas as pd
 import torch
-import requests
+import gym
+from gym import spaces
 from dotenv import load_dotenv
+from stable_baselines3.common.base_class import BaseAlgorithm
+from stable_baselines3.common.utils import obs_as_tensor
 
 
 def reduce_mem_usage(df):
@@ -67,3 +72,12 @@ def send_line_notification(message):
     payload = {"message": f"\n{message}"}
     headers = {"Authorization": f"Bearer {line_notify_token}"}
     requests.post(endpoint, data=payload, headers=headers)
+
+
+def get_action_prob(model: BaseAlgorithm, env: gym.Env, obaservation: spaces.Box):
+    obs = obaservation.reshape((-1,) + env.observation_space.shape)
+    obs = obs_as_tensor(obs, model.device)
+    latent_pi, _, latent_sde = model.policy._get_latent(obs)
+    distribution = model.policy._get_action_dist_from_latent(latent_pi, latent_sde)
+    action_prob = distribution.distribution.probs
+    return action_prob.detach().numpy()[0]

@@ -4,13 +4,13 @@ import pandas as pd
 from gym import spaces
 from math import copysign
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional, Dict
 
 
 class Actions(Enum):
     Sell = 0
     Buy = 1
-    Hold = 2
+    # Neutral = 2
 
 
 class Position:
@@ -51,7 +51,6 @@ class Position:
             "Size": self.size,
             "EntryPrice": self.entry_price,
             "ExitPrice": self.__env.current_price,
-            "PnL": self.profit_or_loss,
             "ReturnPct": self.profit_or_loss_pct,
             "EntryTime": self.entry_time,
             "ExitTime": self.__env.current_datetime,
@@ -98,20 +97,17 @@ class BaseTradingEnv(gym.Env):
         self.position: Optional[Position] = Position(self)
         self.wallet: Optional[Wallet] = Wallet(self)
         self.closed_trades: Optional[pd.DataFrame] = None
-        self.historical_info: Optional[pd.DataFrame] = None
 
     def reset(self):
         self.current_step = self.window_size
         self.position = Position(self)
         self.wallet = Wallet(self)
         self.observation = self.features.iloc[: self.window_size, :].values
-        self.closed_trades = pd.DataFrame(columns=["Size", "EntryPrice", "ExitPrice", "PnL", "ReturnPct", "EntryTime", "ExitTime"])
-        self.historical_info = pd.DataFrame(columns=["Equity [%]"])
+        self.closed_trades = pd.DataFrame(columns=["Size", "EntryPrice", "ExitPrice", "ReturnPct", "EntryTime", "ExitTime"])
         return self.observation
 
     def step(self, action):
         self.action = action
-
         if self.action == Actions.Buy.value and not self.position.is_long:
             self.buy()
 
@@ -125,8 +121,7 @@ class BaseTradingEnv(gym.Env):
         self.observation = self.next_observation
         self.reward = self._calculate_reward()
 
-        self.historical_info.append([self.wallet.equity_pct])
-        self.info = self.historical_info.tail(1).to_dict()
+        self.info = {}
 
         self.current_step += 1
         return self.observation, self.reward, self.done, self.info

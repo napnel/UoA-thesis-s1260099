@@ -1,10 +1,13 @@
 import warnings
-import pandas as pd
 from typing import Optional
 
+import numpy as np
+import pandas as pd
 from bokeh.util.warnings import BokehDeprecationWarning
 from backtesting import Strategy, Backtest
 from stable_baselines3.common.base_class import BaseAlgorithm
+
+from .utils import get_action_prob
 
 
 class DRLStrategy(Strategy):
@@ -14,6 +17,7 @@ class DRLStrategy(Strategy):
     def init(self):
         self.observation = self.env.reset()
         self.max_step = len(self.data.df) - 1
+        self.history_action_prob = np.zeros(self.max_step)
 
     def next(self):
         self.step = len(self.data.df) - 1
@@ -30,6 +34,8 @@ class DRLStrategy(Strategy):
             assert self._broker._cash == self.env.wallet.assets, f"Step:{self.step}: {self._broker._cash} != {self.env.wallet.assets}"
             assert self.equity == self.env.wallet.equity, f"Step{self.step}: {self.equity} != {self.env.wallet.equity}"
             action, _ = self.model.predict(self.env.next_observation, deterministic=True)
+            action_prob = get_action_prob(self.model, self.env, self.env.next_observation)
+            self.history_action_prob[self.step] = action_prob[action]
 
             if action == self.env.actions.Buy.value and not self.position.is_long:
                 if self.position.is_short:
