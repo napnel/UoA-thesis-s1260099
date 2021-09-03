@@ -16,6 +16,19 @@ class TradingEnv(BaseTradingEnv):
         return reward
 
 
+class TradingEnv_v2(BaseTradingEnv):
+    """Profit Per Trade"""
+
+    def _calculate_reward(self):
+        reward = 0
+
+        if not self.closed_trades.empty and self.position.size == 0:
+            if self.closed_trades.iloc[-1]["Steps"] == self.current_step - 1:
+                reward = self.closed_trades.iloc[-1]["ReturnPct"] * 100
+
+        return reward
+
+
 class SRTradingEnv(BaseTradingEnv):
     def _calculate_reward(self):
         # reward = 0.0
