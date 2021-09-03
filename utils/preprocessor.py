@@ -1,10 +1,10 @@
 import warnings
 import numpy as np
 import pandas as pd
-from ta.trend import sma_indicator, MACD, ADXIndicator
+from ta.trend import sma_indicator, MACD, ADXIndicator, STCIndicator
 from ta.momentum import RSIIndicator, StochRSIIndicator
 from ta.volatility import BollingerBands, AverageTrueRange
-from ta.volume import money_flow_index, MFIIndicator, chaikin_money_flow
+from ta.volume import money_flow_index, chaikin_money_flow
 
 
 class Preprocessor:
@@ -20,12 +20,16 @@ class Preprocessor:
         # Trend Indicators
         macd = MACD(data["Close"], window_slow=26, window_fast=12, window_sign=9)
         adx = ADXIndicator(data["High"], data["Low"], data["Close"], window=14)
+        stc = STCIndicator(data["Close"])
         features["DMI_Diff"] = adx.adx_pos() - adx.adx_neg()
         features["MACD"] = macd.macd_diff()
+        features["STC"] = stc.stc()
 
         # Oscillator Indicator
         rsi = RSIIndicator(data["Close"], window=14).rsi()
+        stoch_rsi = StochRSIIndicator(data["Close"])
         features["RSI"] = rsi
+        features["StochRSI"] = stoch_rsi.stochrsi_k() - stoch_rsi.stochrsi_d()
 
         # Volume Indicator
         features["MFI"] = money_flow_index(data["High"], data["Low"], data["Close"], data["Volume"], window=14)
