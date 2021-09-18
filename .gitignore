@@ -139,3 +139,5 @@ references
 *.pickle
 botter
 notebook
+ray_results
+scripts
