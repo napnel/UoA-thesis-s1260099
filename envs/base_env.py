@@ -4,7 +4,9 @@ import pandas as pd
 from gym import spaces
 from math import copysign
 from enum import Enum
-from typing import Any, Optional, Dict
+from typing import Any, Optional, Dict, Callable
+
+from .reward_func import profit_per_tick_reward
 
 
 class Actions(Enum):
@@ -14,7 +16,7 @@ class Actions(Enum):
 
 
 class Position:
-    def __init__(self, env: gym.Env):
+    def __init__(self, env: "BaseTradingEnv"):
         self.__env = env
         self.size: int = 0
         self.entry_price: float = 0.0
@@ -63,7 +65,7 @@ class Position:
 
 
 class Wallet:
-    def __init__(self, env: gym.Env, assets: Optional[float] = None):
+    def __init__(self, env: "BaseTradingEnv", assets: Optional[float] = None):
         self.__env = env
         self.initial_assets = 10 ** len(str(self.__env.df["High"].max()).split(".")[0]) if assets is None else assets
         self.assets = self.initial_assets
@@ -89,22 +91,21 @@ class BaseTradingEnv(gym.Env):
         features: pd.DataFrame,
         window_size: int = 20,
         fee: float = 0.001,
-        actions: Enum = Actions,
+        reward_func: Callable = profit_per_tick_reward,
     ):
         """ """
         self.df = df.copy()
         self.features = features.copy()
         self.fee = fee
         self.window_size = window_size
-        self.actions = actions
-        self.action_space = spaces.Discrete(len(actions))
-        self.observation_size = len(self.features.columns)  # positionの情報を持つか検討する
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.window_size, self.observation_size))
-
+        self.reward_func = reward_func
         self.current_step = 0
         self.position: Optional[Position] = Position(self)
         self.wallet: Optional[Wallet] = Wallet(self)
         self.closed_trades: Optional[pd.DataFrame] = None
+
+        self.action_space = None
+        self.observation_space = None
 
     def reset(self):
         self.done = False
@@ -136,7 +137,7 @@ class BaseTradingEnv(gym.Env):
         self.next_done = True if self.current_step >= len(self.df) - 3 else False
 
         self.observation = self.next_observation
-        self.reward = self._calculate_reward()
+        self.reward = self.reward_func(self)
         self.info = {}
 
         return self.observation, self.reward, self.done, self.info
@@ -167,9 +168,6 @@ class BaseTradingEnv(gym.Env):
         elif self.position.is_long:
             self.position.close()
 
-    def _calculate_reward(self):
-        raise NotImplementedError()
-
     @property
     def next_observation(self):
         return self.features[self.current_step - self.window_size : self.current_step].values
@@ -185,3 +183,7 @@ class BaseTradingEnv(gym.Env):
     @property
     def current_datetime(self):
         return self.df.index[self.current_step + 1]
+
+    @property
+    def show_tech_indicators(self):
+        pass

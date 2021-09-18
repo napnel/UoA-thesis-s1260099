@@ -1,44 +1,87 @@
-from math import copysign
-from .base_env import BaseTradingEnv
+import numpy as np
+import pandas as pd
+from gym import spaces
+from enum import Enum
+from typing import Any, Optional, Dict, Callable
+from .base_env import BaseTradingEnv, Actions
+from .reward_func import profit_per_tick_reward
 
 
-class TradingEnv(BaseTradingEnv):
-    """Profit Per Tick"""
+class DescTradingEnv(BaseTradingEnv):
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        features: pd.DataFrame,
+        window_size: int = 20,
+        fee: float = 0.001,
+        reward_func: Callable = profit_per_tick_reward,
+        actions: Enum = Actions,
+    ):
+        super(DescTradingEnv, self).__init__(df, features, window_size, fee, reward_func)
+        self.actions = actions
+        self.action_space = spaces.Discrete(len(actions))
+        self.observation_size = len(self.features.columns)
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.window_size, self.observation_size), dtype=np.float32)
 
-    def _calculate_reward(self):
-        reward = self.position.profit_or_loss_pct
-        if self.closed_trades.empty:
-            return reward
+    def reset(self):
+        return super(DescTradingEnv, self).reset()
 
-        if self.closed_trades.iloc[-1]["ExitTime"] == self.current_datetime:
-            reward = self.closed_trades.iloc[-1]["ReturnPct"]
-
-        return reward
-
-
-class TradingEnv_v2(BaseTradingEnv):
-    """Profit Per Trade"""
-
-    def _calculate_reward(self):
-        reward = 0
-
-        if not self.closed_trades.empty and self.position.size == 0:
-            if self.closed_trades.iloc[-1]["Steps"] == self.current_step - 1:
-                reward = self.closed_trades.iloc[-1]["ReturnPct"] * 100
-
-        return reward
+    def step(self, action):
+        return super(DescTradingEnv, self).step(action)
 
 
-class SRTradingEnv(BaseTradingEnv):
-    def _calculate_reward(self):
-        # reward = 0.0
-        if self.position.size == 0 or self.position.entry_time == self.current_datetime:
-            print("Position size == 0")
-            return 0.0
+class ContTradingEnv(BaseTradingEnv):
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        features: pd.DataFrame,
+        window_size: int = 20,
+        fee: float = 0.001,
+        reward_func: Callable = profit_per_tick_reward,
+    ):
+        super(ContTradingEnv, self).__init__(df, features, window_size, fee, reward_func)
+        self.action_space = spaces.Box(low=-1, high=-1, dtype=np.float32)
+        self.observation_size = len(self.features.columns) + 2  # features dim + position PnL + equity
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.window_size, self.observation_size), dtype=np.float32)
 
-        trade_return = self._df.loc[self.position.entry_time : self.current_datetime, "Close"].pct_change().dropna().values
-        print("Time: ", self.position.entry_time, " | ", self.current_datetime)
-        print(self._df.loc[self.position.entry_time : self.current_datetime, "Close"])
-        sharpe_ratio = copysign(1, self.position.size) * (trade_return.mean() / trade_return.std())
-        print(f"Mean: {trade_return.mean()}, Std: {trade_return.std()}, SR: {sharpe_ratio}", "\n")
-        return sharpe_ratio
+    def reset(self):
+        super(ContTradingEnv, self).reset()
+        self.features_state = self.features.iloc[: self.window_size, :].values
+        self.account_state = np.tile(np.array([self.position.profit_or_loss_pct, self.wallet.equity_pct]), (self.window_size, 1))
+        self.observation = np.concatenate([self.features_state, self.account_state], axis=0)
+        return self.observation
+
+    def step(self, action):
+        self.action = action
+
+        # Trade Start
+        if self.next_done:
+            self.done = True
+            self.position.close()
+
+        # actionの値から現在のequityの内どのくらいのsizeを使うか決める。
+        elif self.action == Actions.Buy.value and not self.position.is_long:
+            self.buy(size=1)
+
+        elif self.action == Actions.Sell.value and not self.position.is_short:
+            self.sell(size=1)
+
+        # Trade End
+
+        self.current_step += 1
+        self.next_done = True if self.current_step >= len(self.df) - 3 else False
+
+        self.observation = self.next_observation
+        self.reward = self.reward_func(self)
+        self.info = {}
+
+        return self.observation, self.reward, self.done, self.info
+
+    @property
+    def next_observation(self):
+        next_features = self.features[self.current_step - self.window_size : self.current_step].values
+        observation = np.concatenate(
+            [self.observation[1:], np.array([next_features, self.position.profit_or_loss_pct, self.wallet.equity_pct])],
+            axis=1,
+        )
+        return observation
