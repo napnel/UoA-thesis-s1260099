@@ -5,6 +5,7 @@ from gym import spaces
 from math import copysign
 from enum import Enum
 from typing import Any, Optional, Dict, Callable
+from empyrical import sharpe_ratio
 
 from .reward_func import profit_per_tick_reward
 
@@ -23,7 +24,7 @@ class Position:
         self.entry_time: Optional[pd.Timestamp] = None
 
     def __repr__(self) -> str:
-        return f"Position(size: {self.size}, entry_price: {self.entry_price}, pl: {self.profit_or_loss:.0f})"
+        return f"Position(size: {self.size}, entry_price: {self.entry_price}, PnL: {self.pnl:.0f})"
 
     @property
     def is_long(self) -> bool:
@@ -34,29 +35,31 @@ class Position:
         return True if self.size < 0 else False
 
     @property
-    def profit_or_loss(self) -> float:
+    def pnl(self) -> float:
         if self.size == 0:
             return 0
-        return self.size * (self.__env.opening_price - self.entry_price)
+        return self.size * (self.__env.closing_price - self.entry_price)
 
     @property
-    def profit_or_loss_pct(self) -> float:
+    def pnl_pct(self) -> float:
         if self.size == 0:
             return 0
-        return copysign(1, self.size) * (self.__env.opening_price - self.entry_price) / self.entry_price
+        return copysign(1, self.size) * (self.__env.closing_price - self.entry_price) / self.entry_price
 
     def close(self):
         if self.size == 0:
             return
-        self.__env.wallet.assets += self.profit_or_loss
+        self.__env.wallet.assets += self.pnl
+        # returns = copysign(1, self.size) * self.__env.df.loc[self.entry_time : self.__env.current_time, "Close"].pct_change().dropna()
         trade = {
             "Steps": self.__env.current_step,
             "Size": self.size,
             "EntryPrice": self.entry_price,
-            "ExitPrice": self.__env.opening_price,
-            "ReturnPct": self.profit_or_loss_pct,
+            "ExitPrice": self.__env.closing_price,
+            "ReturnPct": self.pnl_pct,
+            # "SharpeRatio": sharpe_ratio(returns),
             "EntryTime": self.entry_time,
-            "ExitTime": self.__env.current_datetime,
+            "ExitTime": self.__env.current_time,
         }
         self.__env.closed_trades = self.__env.closed_trades.append(trade, ignore_index=True)
         self.size = 0
@@ -103,6 +106,7 @@ class BaseTradingEnv(gym.Env):
         self.position: Optional[Position] = Position(self)
         self.wallet: Optional[Wallet] = Wallet(self)
         self.closed_trades: Optional[pd.DataFrame] = None
+        self.observation_size = len(self.features.columns) + 1
 
         self.action_space = None
         self.observation_space = None
@@ -110,11 +114,15 @@ class BaseTradingEnv(gym.Env):
     def reset(self):
         self.done = False
         self.next_done = False
+        self.reward = 0
         self.current_step = self.window_size
         self.position = Position(self)
         self.wallet = Wallet(self)
-        self.observation = self.features.iloc[: self.window_size, :].values
+        self.equity_curve = [self.wallet.equity]
         self.closed_trades = pd.DataFrame(columns=["Steps", "Size", "EntryPrice", "ExitPrice", "ReturnPct", "EntryTime", "ExitTime"])
+        features_obs = self.features.iloc[: self.window_size, :].values
+        account_obs = np.tile([self.position.pnl_pct], (self.window_size, 1))
+        self.observation = np.hstack((features_obs, account_obs))
         return self.observation
 
     def step(self, action):
@@ -134,6 +142,7 @@ class BaseTradingEnv(gym.Env):
         # Trade End
 
         self.current_step += 1
+        self.equity_curve.append(self.wallet.equity)
         self.next_done = True if self.current_step >= len(self.df) - 3 else False
 
         self.observation = self.next_observation
@@ -145,45 +154,43 @@ class BaseTradingEnv(gym.Env):
     def render(self, mode="human"):
         print("===" * 10, f"Step: {self.current_step}", "===" * 10)
         print(f"Equity: {self.wallet.equity}")
-        print(f"Position: {self.position.size}, {self.position.profit_or_loss}")
+        print(f"Position: {self.position.size}, {self.position.pnl}")
         print(f"Action: {self.action}, Reward: {self.reward}, Done: {self.done}")
 
     def buy(self, size: Optional[float] = None):
         if self.position.size == 0:
-            adjusted_price = self.opening_price * (1 + self.fee)
+            adjusted_price = self.closing_price * (1 + self.fee)
             self.position.size = int(self.wallet.free_assets // adjusted_price) if size is None else size
             self.position.entry_price = adjusted_price
-            self.position.entry_time = self.current_datetime
+            self.position.entry_time = self.current_time
 
         elif self.position.is_short:
             self.position.close()
 
     def sell(self, size: Optional[float] = None):
         if self.position.size == 0:
-            adjusted_price = self.opening_price * (1 - self.fee)
+            adjusted_price = self.closing_price * (1 - self.fee)
             self.position.size = -int(self.wallet.free_assets // adjusted_price) if size is None else -size
             self.position.entry_price = adjusted_price
-            self.position.entry_time = self.current_datetime
+            self.position.entry_time = self.current_time
 
         elif self.position.is_long:
             self.position.close()
 
     @property
     def next_observation(self):
-        return self.features[self.current_step - self.window_size : self.current_step].values
+        next_single_obs = np.hstack((self.features.iloc[self.current_step - 1, :], self.position.pnl_pct))
+        next_observation = np.vstack((self.observation[1:], next_single_obs))
+        return next_observation
 
     @property
     def closing_price(self):
         return self.df["Close"][self.current_step]
 
     @property
-    def opening_price(self):
-        return self.df["Open"][self.current_step + 1]
+    def current_time(self):
+        return self.df.index[self.current_step]
 
     @property
-    def current_datetime(self):
-        return self.df.index[self.current_step + 1]
-
-    @property
-    def show_tech_indicators(self):
-        pass
+    def tech_indicators(self):
+        return self.features.columns.tolist()

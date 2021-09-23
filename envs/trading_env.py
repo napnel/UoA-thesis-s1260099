@@ -20,7 +20,6 @@ class DescTradingEnv(BaseTradingEnv):
         super(DescTradingEnv, self).__init__(df, features, window_size, fee, reward_func)
         self.actions = actions
         self.action_space = spaces.Discrete(len(actions))
-        self.observation_size = len(self.features.columns)
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.window_size, self.observation_size), dtype=np.float32)
 
     def reset(self):
@@ -41,14 +40,14 @@ class ContTradingEnv(BaseTradingEnv):
     ):
         super(ContTradingEnv, self).__init__(df, features, window_size, fee, reward_func)
         self.action_space = spaces.Box(low=-1, high=-1, dtype=np.float32)
-        self.observation_size = len(self.features.columns) + 2  # features dim + position PnL + equity
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.window_size, self.observation_size), dtype=np.float32)
 
     def reset(self):
+        # To Do: どれくらいassetsを使っているか比で表現する
         super(ContTradingEnv, self).reset()
-        self.features_state = self.features.iloc[: self.window_size, :].values
-        self.account_state = np.tile(np.array([self.position.profit_or_loss_pct, self.wallet.equity_pct]), (self.window_size, 1))
-        self.observation = np.concatenate([self.features_state, self.account_state], axis=0)
+        self.features_obs = self.features.iloc[: self.window_size, :].values
+        self.account_obs = np.tile(A=[self.position.pnl_pct], reps=(self.window_size, 1))
+        self.observation = np.concatenate([self.features_obs, self.account_obs], axis=0)
         return self.observation
 
     def step(self, action):
@@ -81,7 +80,7 @@ class ContTradingEnv(BaseTradingEnv):
     def next_observation(self):
         next_features = self.features[self.current_step - self.window_size : self.current_step].values
         observation = np.concatenate(
-            [self.observation[1:], np.array([next_features, self.position.profit_or_loss_pct, self.wallet.equity_pct])],
+            [self.observation[1:], np.array([next_features, self.position.pnl_pct, self.wallet.equity_pct])],
             axis=1,
         )
         return observation
