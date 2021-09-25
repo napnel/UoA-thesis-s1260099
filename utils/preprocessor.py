@@ -32,41 +32,43 @@ class Preprocessor:
         return data
 
     @classmethod
-    def extract_features(self, data: pd.DataFrame):
+    def extract_features(self, data: pd.DataFrame, use_tech_indicator=True):
         features = pd.DataFrame(index=data.index)
 
         features["log_return"] = data["Close"].apply(np.log1p).diff()
         features["log_volume_diff"] = data["Volume"].apply(np.log1p).diff()
-        features["volatility_5"] = features["log_return"].rolling(5).std()
         features["volatility_20"] = features["log_return"].rolling(20).std()
 
-        sma_5 = sma_indicator(data["Close"], window=5)
         sma_20 = sma_indicator(data["Close"], window=20)
-        features["ma_gap_5"] = (data["Close"] - sma_5) / sma_5
         features["ma_gap_20"] = (data["Close"] - sma_20) / sma_20
 
-        # Trend Indicators
-        macd = MACD(data["Close"], window_slow=26, window_fast=12, window_sign=9)
-        adx = ADXIndicator(data["High"], data["Low"], data["Close"], window=14)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
-            features["ADX"] = adx.adx()
+        features["high_change_20"] = (data["High"].rolling(20).max() - data["Close"]) / data["Close"]
+        features["low_change_20"] = (data["Low"].rolling(20).min() - data["Close"]) / data["Close"]
 
-        features["MACD Hist"] = macd.macd_diff()
+        if use_tech_indicator:
+            # Trend Indicators
+            macd = MACD(data["Close"], window_slow=26, window_fast=12, window_sign=9)
+            adx = ADXIndicator(data["High"], data["Low"], data["Close"], window=14)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                features["ADX"] = adx.adx()
 
-        # Oscillator Indicator
-        rsi = RSIIndicator(data["Close"], window=14).rsi()
-        stoch_rsi = StochRSIIndicator(data["Close"])
-        features["RSI"] = rsi
-        # features["StochRSI"] = stoch_rsi.stochrsi_k() - stoch_rsi.stochrsi_d()
+            features["MACD Hist"] = macd.macd_diff()
 
-        # Volume Indicator
-        features["MFI"] = money_flow_index(data["High"], data["Low"], data["Close"], data["Volume"], window=14)
-        features["CMF"] = chaikin_money_flow(data["High"], data["Low"], data["Close"], data["Volume"])
+            # Oscillator Indicator
+            rsi = RSIIndicator(data["Close"], window=14).rsi()
+            stoch_rsi = StochRSIIndicator(data["Close"])
+            features["RSI"] = rsi
+            # features["StochRSI"] = stoch_rsi.stochrsi_k() - stoch_rsi.stochrsi_d()
 
-        # Volatility Indicator
-        bb = BollingerBands(data["Close"], window=20, window_dev=2)
-        features["BB %B"] = bb.bollinger_pband()
+            # Volume Indicator
+            features["MFI"] = money_flow_index(data["High"], data["Low"], data["Close"], data["Volume"], window=14)
+            features["CMF"] = chaikin_money_flow(data["High"], data["Low"], data["Close"], data["Volume"])
+
+            # Volatility Indicator
+            bb = BollingerBands(data["Close"], window=20, window_dev=2)
+            features["BB %B"] = bb.bollinger_pband()
+
         return features
 
     @classmethod
