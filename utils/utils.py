@@ -81,3 +81,17 @@ def get_action_prob(model: BaseAlgorithm, env: gym.Env, obaservation: spaces.Box
     distribution = model.policy._get_action_dist_from_latent(latent_pi, latent_sde)
     action_prob = distribution.distribution.probs
     return action_prob.detach().numpy()[0]
+
+
+def visualize_network(agent, device="cpu", policy_id="default_policy"):
+    import torch
+    from torchviz import make_dot
+    from ray.rllib.execution.rollout_ops import ParallelRollouts
+
+    rollouts = ParallelRollouts(agent.workers, mode="async")
+    batch = next(rollouts)
+    torch_batch = batch.to_device("cpu")
+
+    model = agent.get_policy(policy_id).model
+    y = model(torch_batch)[0]
+    return make_dot(y, params=dict(model.named_parameters()))

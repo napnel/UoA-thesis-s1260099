@@ -34,7 +34,7 @@ class DRLStrategy(Strategy):
         self.observation = self.env.reset()
         self.done = False
         self.sma = self.I(sma_indicator, self.data.Close.s, 20, overlay=True, plot=True)
-        self.macd = self.I(macd_indicator, self.data.Close.s, overlay=False, plot=True)
+        # self.macd = self.I(macd_indicator, self.data.Close.s, overlay=False, plot=True)
         self.rsi = self.I(rsi, self.data.Close.s, overlay=False, plot=True)
         self.bb = self.I(bollinger_bands_indicator, self.data.Close.s, overlay=True, plot=True)
 
