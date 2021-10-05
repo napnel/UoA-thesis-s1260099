@@ -7,7 +7,7 @@ from enum import Enum
 from typing import Any, Optional, Dict, Callable
 from empyrical import sharpe_ratio
 
-from .reward_func import profit_per_tick_reward
+from src.envs.reward_func import equity_log_return_reward
 
 
 class Actions(Enum):
@@ -92,9 +92,9 @@ class BaseTradingEnv(gym.Env):
         self,
         df: pd.DataFrame,
         features: pd.DataFrame,
-        window_size: int = 20,
+        window_size: int = 5,
         fee: float = 0.001,
-        reward_func: Callable = profit_per_tick_reward,
+        reward_func: Callable = equity_log_return_reward,
     ):
         """ """
         self.df = df.copy()
@@ -134,10 +134,12 @@ class BaseTradingEnv(gym.Env):
             self.position.close()
 
         elif self.action == Actions.Buy.value and not self.position.is_long:
-            self.buy(size=1)
+            # self.buy(size=1)
+            self.buy()
 
         elif self.action == Actions.Sell.value and not self.position.is_short:
-            self.sell(size=1)
+            # self.sell(size=1)
+            self.sell()
 
         # Trade End
 

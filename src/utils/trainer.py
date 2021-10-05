@@ -1,7 +1,8 @@
 from tabnanny import check
 from typing import Dict, Any, Tuple
 from ray.rllib.agents.trainer import Trainer
-from envs.trading_env import ContTradingEnv, DescTradingEnv
+
+from src.envs.trading_env import ContTradingEnv, DescTradingEnv
 
 
 class Trainer:

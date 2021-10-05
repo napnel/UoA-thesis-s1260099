@@ -3,7 +3,8 @@ from backtesting.lib import crossover
 from backtesting import Backtest
 from ta.trend import MACD, ema_indicator
 from ta.momentum import rsi
-from data_loader import DataLoader
+
+from src.utils.data_loader import DataLoader
 
 
 class MACDStrategy(Strategy):

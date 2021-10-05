@@ -1,15 +1,11 @@
 import os
 import random
 import requests
+from typing import Any, Dict
 
 import numpy as np
 import pandas as pd
-import torch
-import gym
-from gym import spaces
 from dotenv import load_dotenv
-from stable_baselines3.common.base_class import BaseAlgorithm
-from stable_baselines3.common.utils import obs_as_tensor
 
 
 def reduce_mem_usage(df):
@@ -52,6 +48,8 @@ def reduce_mem_usage(df):
 
 
 def set_random_seed(seed=0):
+    import torch
+
     random.seed(seed)
     os.environ["PYTHONHASHSEED"] = str(seed)
     np.random.seed(seed)
@@ -74,15 +72,6 @@ def send_line_notification(message):
     requests.post(endpoint, data=payload, headers=headers)
 
 
-def get_action_prob(model: BaseAlgorithm, env: gym.Env, obaservation: spaces.Box):
-    obs = obaservation.reshape((-1,) + env.observation_space.shape)
-    obs = obs_as_tensor(obs, model.device)
-    latent_pi, _, latent_sde = model.policy._get_latent(obs)
-    distribution = model.policy._get_action_dist_from_latent(latent_pi, latent_sde)
-    action_prob = distribution.distribution.probs
-    return action_prob.detach().numpy()[0]
-
-
 def visualize_network(agent, device="cpu", policy_id="default_policy"):
     import torch
     from torchviz import make_dot
@@ -95,3 +84,76 @@ def visualize_network(agent, device="cpu", policy_id="default_policy"):
     model = agent.get_policy(policy_id).model
     y = model(torch_batch)[0]
     return make_dot(y, params=dict(model.named_parameters()))
+
+
+def get_agent_class(algo: str):
+    if algo == "DQN":
+        from ray.rllib.agents import dqn
+
+        return dqn.DQNTrainer, dqn.DEFAULT_CONFIG.copy()
+
+    elif algo == "A2C":
+        from ray.rllib.agents import a3c
+
+        return a3c.A2CTrainer, a3c.DEFAULT_CONFIG.copy()
+
+    elif algo == "PPO":
+        from ray.rllib.agents import ppo
+
+        return ppo.PPOTrainer, ppo.DEFAULT_CONFIG.copy()
+
+    elif algo == "SAC":
+        from ray.rllib.agents import sac
+
+        return sac.SACTrainer, sac.DEFAULT_CONFIG.copy()
+
+    else:
+        raise ValueError
+
+
+def get_env(env_name: str, env_config={}):
+    if env_name == "DescTradingEnv":
+        from envs.trading_env import DescTradingEnv
+
+        env = DescTradingEnv(**env_config)
+
+    elif env_name == "ContTradingEnv":
+        from envs.trading_env import ContTradingEnv
+
+        env = ContTradingEnv(**env_config)
+
+    else:
+        raise ValueError
+
+    return env
+
+
+def clean_result(result: Dict[str, Any]):
+    output = {}
+    output["episode_reward_max"] = result["episode_reward_max"]
+    output["episode_reward_mean"] = result["episode_reward_mean"]
+    output["episode_reward_min"] = result["episode_reward_min"]
+    output["evaluation"] = {}
+    output["evaluation"]["episode_reward_max"] = result["evaluation"]["episode_reward_max"]
+    output["evaluation"]["episode_reward_mean"] = result["evaluation"]["episode_reward_mean"]
+    output["evaluation"]["episode_reward_min"] = result["evaluation"]["episode_reward_min"]
+    output["timesteps"] = result["timesteps_total"]
+    output["iteration"] = result["training_iteration"]
+    return output
+
+
+def clean_stats(stats: pd.Series):
+    output = stats.loc[
+        [
+            "Start",
+            "End",
+            "Return [%]",
+            "Buy & Hold Return [%]",
+            "Return (Ann.) [%]",
+            "Volatility (Ann.) [%]",
+            "Sharpe Ratio",
+            "Max. Drawdown [%]",
+            "Max. Drawdown Duration",
+        ]
+    ]
+    return output
