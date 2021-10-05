@@ -1,11 +1,9 @@
 import gym
 import numpy as np
 import pandas as pd
-from gym import spaces
 from math import copysign
 from enum import Enum
 from typing import Any, Optional, Dict, Callable
-from empyrical import sharpe_ratio
 
 from src.envs.reward_func import equity_log_return_reward
 
@@ -70,7 +68,7 @@ class Position:
 class Wallet:
     def __init__(self, env: "BaseTradingEnv", assets: Optional[float] = None):
         self.__env = env
-        self.initial_assets = 10 ** len(str(self.__env.df["High"].max()).split(".")[0]) if assets is None else assets
+        self.initial_assets = 100000
         self.assets = self.initial_assets
 
     @property
