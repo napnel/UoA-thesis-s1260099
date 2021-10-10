@@ -20,6 +20,7 @@ class Position:
         self.size: int = 0
         self.entry_price: float = 0.0
         self.entry_time: Optional[pd.Timestamp] = None
+        self.stop_loss: Optional[float] = -1
 
     def __repr__(self) -> str:
         return f"Position(size: {self.size}, entry_price: {self.entry_price}, PnL: {self.pnl:.0f})"
@@ -44,18 +45,18 @@ class Position:
             return 0
         return copysign(1, self.size) * (self.__env.closing_price - self.entry_price) / self.entry_price
 
-    def close(self):
+    def close(self, stop=False):
         if self.size == 0:
             return
-        self.__env.wallet.assets += self.pnl
-        # returns = copysign(1, self.size) * self.__env.df.loc[self.entry_time : self.__env.current_time, "Close"].pct_change().dropna()
+
+        pnl = self.pnl if not stop else self.size * (self.stop_loss - self.entry_price)
+        self.__env.wallet.assets += pnl
         trade = {
             "Steps": self.__env.current_step,
             "Size": self.size,
             "EntryPrice": self.entry_price,
-            "ExitPrice": self.__env.closing_price,
-            "ReturnPct": self.pnl_pct,
-            # "SharpeRatio": sharpe_ratio(returns),
+            "ExitPrice": self.__env.closing_price if not stop else self.stop_loss,
+            "ReturnPct": self.pnl_pct if not stop else copysign(1, self.size) * (self.stop_loss - self.entry_price) / self.entry_price,
             "EntryTime": self.entry_time,
             "ExitTime": self.__env.current_time,
         }
@@ -63,6 +64,7 @@ class Position:
         self.size = 0
         self.entry_price = 0.0
         self.entry_time = None
+        self.stop_loss = None
 
 
 class Wallet:
@@ -132,16 +134,21 @@ class BaseTradingEnv(gym.Env):
             self.position.close()
 
         elif self.action == Actions.Buy.value and not self.position.is_long:
-            # self.buy(size=1)
             self.buy()
+            # self.buy(size=1)
+            # self.buy(stop_loss=self.df["Close"][self.current_step - self.window_size : self.current_step].min() * (1 - 0.005))
 
         elif self.action == Actions.Sell.value and not self.position.is_short:
-            # self.sell(size=1)
             self.sell()
+            # self.sell(size=1)
+            # self.sell(stop_loss=self.df["Close"][self.current_step - self.window_size : self.current_step].max() * (1 + 0.005))
 
         # Trade End
 
         self.current_step += 1
+
+        self.judge_stop_loss()
+
         self.equity_curve.append(self.wallet.equity)
         self.next_done = True if self.current_step >= len(self.df) - 3 else False
 
@@ -157,25 +164,37 @@ class BaseTradingEnv(gym.Env):
         print(f"Position: {self.position.size}, {self.position.pnl}")
         print(f"Action: {self.action}, Reward: {self.reward}, Done: {self.done}")
 
-    def buy(self, size: Optional[float] = None):
+    def buy(self, size: Optional[float] = None, stop_loss: Optional[float] = None):
         if self.position.size == 0:
             adjusted_price = self.closing_price * (1 + self.fee)
             self.position.size = int(self.wallet.free_assets // adjusted_price) if size is None else size
             self.position.entry_price = adjusted_price
             self.position.entry_time = self.current_time
+            self.position.stop_loss = stop_loss
 
         elif self.position.is_short:
             self.position.close()
 
-    def sell(self, size: Optional[float] = None):
+    def sell(self, size: Optional[float] = None, stop_loss: Optional[float] = None):
         if self.position.size == 0:
             adjusted_price = self.closing_price * (1 - self.fee)
             self.position.size = -int(self.wallet.free_assets // adjusted_price) if size is None else -size
             self.position.entry_price = adjusted_price
             self.position.entry_time = self.current_time
+            self.position.stop_loss = stop_loss
 
         elif self.position.is_long:
             self.position.close()
+
+    def judge_stop_loss(self):
+        if not self.position.stop_loss:
+            return
+
+        if self.position.is_short and self.df["Open"][self.current_step] <= self.position.stop_loss <= self.df["Close"][self.current_step]:
+            self.position.close(stop=True)
+
+        elif self.position.is_long and self.df["Open"][self.current_step] >= self.position.stop_loss >= self.df["Close"][self.current_step]:
+            self.position.close(stop=True)
 
     @property
     def next_observation(self):

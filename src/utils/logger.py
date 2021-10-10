@@ -7,18 +7,17 @@ from ray.tune.logger import UnifiedLogger
 
 
 def create_log_filename(args: Namespace):
-    filename = ""
+    filename = args.algo
 
-    omited_list = ("backtest", "stop_timesteps", "checkpoint")
+    omited_list = ("algo", "backtest", "stop_timesteps", "checkpoint", "logdir")
 
     for key, value in args.__dict__.items():
         if value and key not in omited_list:
             if isinstance(value, list):
                 value = tuple(value)
-            filename += f"({key}={value})_"
+            filename += f"_({key}={value})"
 
     filename = filename.replace(" ", "")
-    filename = filename[:-1]
     return filename
 
 

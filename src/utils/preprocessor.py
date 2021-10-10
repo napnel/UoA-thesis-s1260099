@@ -36,33 +36,12 @@ class Preprocessor:
         return data_train, features_train, data_eval, features_eval
 
     @classmethod
-    def _preprocessing(self, _data_train: pd.DataFrame, _data_eval: pd.DataFrame, use_tech_indicators=True):
-        self.clean_data(_data_train)
-        self.clean_data(_data_eval)
-        data_train = _data_train.copy()
-        data_eval = _data_eval.copy()
-        features_train = self.extract_features(data_train, use_tech_indicators)
-        features_eval = self.extract_features(data_eval, use_tech_indicators)
-        data_train, features_train = self.align_date(data_train, features_train)
-        data_eval, features_eval = self.align_date(data_eval, features_eval)
-
-        # transformer = PowerTransformer()
-        # features_train = pd.DataFrame(transformer.fit_transform(features_train), index=features_train.index, columns=features_train.columns)
-        # features_eval = pd.DataFrame(transformer.fit_transform(features_eval), index=features_eval.index, columns=features_eval.columns)
-
-        scaler = StandardScaler()
-        features_train = pd.DataFrame(scaler.fit_transform(features_train), index=features_train.index, columns=features_train.columns)
-        features_eval = pd.DataFrame(scaler.fit_transform(features_eval), index=features_eval.index, columns=features_eval.columns)
-        # features_eval = pd.DataFrame(scaler.transform(features_eval), index=features_eval.index, columns=features_eval.columns)
-        return data_train, features_train, data_eval, features_eval
-
-    @classmethod
     def clean_data(self, data: pd.DataFrame) -> pd.DataFrame:
         assert not data.isnull().sum().any()
         return data
 
     @classmethod
-    def extract_features(self, data: pd.DataFrame, use_tech_indicators=True):
+    def extract_features(self, data: pd.DataFrame):
         features = pd.DataFrame(index=data.index)
 
         open, high, low, close, volume = data["Open"], data["High"], data["Low"], data["Close"], data["Volume"]
@@ -78,7 +57,7 @@ class Preprocessor:
         features["shadow_range"] = ((high - low) - np.abs(open - close)) / prev_close
         features["market_impact"] = (features["true_range"] / features["volume"]).replace([np.inf, -np.inf], 0)
         features = features.fillna(0)
-        aggregated_periods = [5, 10, 20, 50, 100]
+        aggregated_periods = [5, 10, 20, 50, 100, 200]
 
         for period in aggregated_periods:
             features[f"rate_of_return_{period}"] = close.pct_change(period)
@@ -115,27 +94,33 @@ class Preprocessor:
         # # Volatility Indicator
         # bb = BollingerBands(data["Close"], window=20, window_dev=2)
         # features["BB %B"] = bb.bollinger_pband()
-        return features.sort_index(axis=1)
+        data, features = self.align_date(data, features)
+        return data, features.sort_index(axis=1)
 
     @classmethod
-    def preprocessing_v2(self, _data: pd.DataFrame):
-        data = _data.copy()
-        features = pd.DataFrame(index=data.index)
+    def train_test_split(
+        self,
+        data: pd.DataFrame,
+        features: pd.DataFrame,
+        train_start: str = "2009-01-01",
+        train_end: str = "2019-01-01",
+        eval_start: str = "2019-01-01",
+        eval_end: str = "2021-01-01",
+        scaling: bool = True,
+    ):
+        # assert (data.index == features.index).all(), f"{data.index}, {features.index}"
+        data_train = data.loc[train_start:train_end]
+        data_eval = data.loc[eval_start:eval_end]
 
-        open, high, low, close, volume = data["Open"], data["High"], data["Low"], data["Close"], data["Volume"]
-        prev_close = close.shift(1)
+        features_train = features.loc[train_start:train_end]
+        features_eval = features.loc[eval_start:eval_end]
 
-        features["open"] = (open - prev_close) / prev_close
-        features["high"] = (high - prev_close) / prev_close
-        features["low"] = (low - prev_close) / prev_close
-        features["close"] = (close - prev_close) / prev_close
-        features["volume"] = volume.apply(np.log1p)
+        if scaling:
+            scaler = StandardScaler()
+            features_train = pd.DataFrame(scaler.fit_transform(features_train), index=features_train.index, columns=features_train.columns)
+            features_eval = pd.DataFrame(scaler.transform(features_eval), index=features_eval.index, columns=features_eval.columns)
 
-        data, features = self.align_date(data, features)
-
-        scaler = StandardScaler()
-        features = pd.DataFrame(scaler.fit_transform(features), index=features.index, columns=features.columns)
-        return data, features
+        return data_train, features_train, data_eval, features_eval
 
     @classmethod
     def align_date(self, data: pd.DataFrame, features: pd.DataFrame):

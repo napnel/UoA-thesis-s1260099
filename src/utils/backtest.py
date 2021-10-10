@@ -1,12 +1,13 @@
+import os
 import warnings
-
 import pandas as pd
+from typing import Optional
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", UserWarning)
     from backtesting import Strategy, Backtest
 
-RandomAgent = None
+Agent = None
 
 
 class DRLStrategy(Strategy):
@@ -65,7 +66,15 @@ class DRLStrategy(Strategy):
         return "See Debug Above"
 
 
-def backtest(env, agent=RandomAgent, plot=False, plot_filename=None) -> pd.DataFrame:
+def backtest(
+    env,
+    agent=None,
+    save_dir: Optional[str] = None,
+    plot: bool = True,
+) -> pd.DataFrame:
+
+    os.makedirs(save_dir, exist_ok=True)
+
     bt = Backtest(
         env.df,
         DRLStrategy,
@@ -74,6 +83,29 @@ def backtest(env, agent=RandomAgent, plot=False, plot_filename=None) -> pd.DataF
         trade_on_close=True,
     )
     stats = bt.run(env=env, agent=agent)
+
     if plot:
-        bt.plot(filename=plot_filename)
+        bt.plot(filename=os.path.join(save_dir, "backtest"))
+
+    if save_dir:
+        performance = stats.loc[
+            [
+                "Start",
+                "End",
+                "Duration",
+                "Return [%]",
+                "Buy & Hold Return [%]",
+                "Return (Ann.) [%]",
+                "Volatility (Ann.) [%]",
+                "Sharpe Ratio",
+                "Max. Drawdown [%]",
+            ]
+        ]
+        equity_curve = stats.loc["_equity_curve"]
+        trades = stats.loc["_trades"]
+
+        performance.to_csv(os.path.join(save_dir, "performance.csv"), header=False)
+        equity_curve.to_csv(os.path.join(save_dir, "equity_curve.csv"))
+        trades.to_csv(os.path.join(save_dir, "trades.csv"), index=False)
+
     return stats

@@ -92,6 +92,11 @@ def get_agent_class(algo: str):
 
         return dqn.DQNTrainer, dqn.DEFAULT_CONFIG.copy()
 
+    elif algo == "Rainbow":
+        from ray.rllib.agents import dqn
+
+        return dqn.DQNTrainer, dqn.DEFAULT_CONFIG.copy()
+
     elif algo == "A2C":
         from ray.rllib.agents import a3c
 
