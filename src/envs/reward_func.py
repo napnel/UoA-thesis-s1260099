@@ -23,8 +23,9 @@ def equity_log_return_reward(env):
     return reward
 
 
-def equity_change_init_to_current(env):
-    pass
+def initial_equity_return_reward(env):
+    reward = (env.equity_curve[-1] - env.equity_curve[0]) / env.equity_curve[0]
+    return reward
 
 
 def sharpe_ratio_reward(env):

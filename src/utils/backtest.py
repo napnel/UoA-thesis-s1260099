@@ -7,8 +7,6 @@ with warnings.catch_warnings():
     warnings.simplefilter("ignore", UserWarning)
     from backtesting import Strategy, Backtest
 
-Agent = None
-
 
 class DRLStrategy(Strategy):
     env = None
@@ -27,10 +25,12 @@ class DRLStrategy(Strategy):
             assert self._broker._cash == self.env.wallet.assets, self.debug()
             assert self.equity == self.env.wallet.equity, self.debug()
             # action, _ = self.agent.predict(self.env.observation, deterministic=True)
-            if self.agent:
-                action = self.agent.compute_single_action(self.env.observation, explore=False)
-            else:
+            if self.agent == "Random":
                 action = self.env.action_space.sample()
+            elif self.agent == "Buy&Hold":
+                action = self.env.actions.Buy.value
+            elif self.agent:
+                action = self.agent.compute_single_action(self.env.observation, explore=False)
             # do Trade
 
             exec_trade = []
@@ -52,7 +52,8 @@ class DRLStrategy(Strategy):
 
             self.observation, _, self.done, _ = self.env.step(action)
             for trade in exec_trade:
-                trade(size=abs(self.env.position.size))
+                if self.env.position.size != 0:
+                    trade(size=abs(self.env.position.size))
 
     def debug(self):
         print("===" * 10, "DEBUG", "===" * 10)
@@ -68,12 +69,10 @@ class DRLStrategy(Strategy):
 
 def backtest(
     env,
-    agent=None,
+    agent="Random",
     save_dir: Optional[str] = None,
     plot: bool = True,
 ) -> pd.DataFrame:
-
-    os.makedirs(save_dir, exist_ok=True)
 
     bt = Backtest(
         env.df,
@@ -84,10 +83,8 @@ def backtest(
     )
     stats = bt.run(env=env, agent=agent)
 
-    if plot:
-        bt.plot(filename=os.path.join(save_dir, "backtest"))
-
     if save_dir:
+        os.makedirs(save_dir, exist_ok=True)
         performance = stats.loc[
             [
                 "Start",
@@ -107,5 +104,7 @@ def backtest(
         performance.to_csv(os.path.join(save_dir, "performance.csv"), header=False)
         equity_curve.to_csv(os.path.join(save_dir, "equity_curve.csv"))
         trades.to_csv(os.path.join(save_dir, "trades.csv"), index=False)
+        if plot:
+            bt.plot(filename=os.path.join(save_dir, "backtest"))
 
     return stats
