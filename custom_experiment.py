@@ -1,6 +1,7 @@
 import os
 import glob
 from datetime import datetime
+from threading import local
 from time import time
 import pandas as pd
 import shutil
@@ -15,6 +16,7 @@ from ray.tune import CLIReporter
 from ray.rllib.agents.trainer import Trainer
 from ray.rllib.agents import ppo, dqn
 from ray.rllib.models import ModelCatalog
+from ray.tune.logger import UnifiedLogger, CSVLogger, JsonLogger, TBXLogger
 
 from src.envs.trading_env import DescTradingEnv
 from src.envs.reward_func import equity_log_return_reward, initial_equity_return_reward
@@ -25,6 +27,7 @@ from src.utils.misc import clean_result, clean_stats, get_agent_class, send_line
 
 def experiment(config, checkpoint_dir=None):
     stop_timesteps_total = config.pop("_timesteps_total")
+    n_splits = config.pop("_n_splits")
 
     agent_class: Trainer = config.pop("_agent_class")
     data: pd.DataFrame = config.pop("_data")
@@ -32,46 +35,39 @@ def experiment(config, checkpoint_dir=None):
     window_size: int = config.pop("_window_size")
     reward_func = config.pop("_reward_func")
 
-    data_train, features_train, data_eval, features_eval = Preprocessor.train_test_split(
-        data,
-        features,
-        train_start="2015-01-01",
-        train_end="2020-01-01",
-        eval_start="2020-01-01",
-        eval_end="2021-09-30",
-        scaling=True,
-    )
+    if args.algo == "DQN":
+        config["hiddens"] = [64, 16]
 
-    config["env_config"] = {
-        "df": data_train,
-        "features": features_train,
-        "reward_func": reward_func,
-        "window_size": window_size,
-    }
-    config["evaluation_config"]["env_config"] = {
-        "df": data_eval,
-        "features": features_eval,
-        "reward_func": reward_func,
-        "window_size": window_size,
-    }
+    config["env_config"] = {"reward_func": reward_func, "window_size": window_size}
+    config["evaluation_config"]["env_config"] = {"reward_func": reward_func, "window_size": window_size}
 
-    train_agent: Trainer = agent_class(config=config)
-    checkpoint = None
-    train_results = {}
+    results_list = []
+    for i, (data_train, features_train, data_eval, features_eval) in enumerate(
+        Preprocessor.blocked_cross_validation(data, features, n_splits=n_splits)
+    ):
+        config["env_config"]["data"] = data_train
+        config["env_config"]["features"] = features_train
+        config["evaluation_config"]["env_config"]["data"] = data_eval
+        config["evaluation_config"]["env_config"]["features"] = features_eval
+        agent = agent_class(config=config, logger_creator=lambda config: UnifiedLogger(config, f"{i}"))
 
-    # print("===" * 10, "Train", "===" * 10)
-    while True:
-        train_results = train_agent.train()
-        if train_results["timesteps_total"] > stop_timesteps_total:
-            break
+        history_results = []
 
-        tune.report(**train_results)
+        while True:
+            train_results = agent.train()
+            if train_results["timesteps_total"] > stop_timesteps_total:
+                break
 
-    checkpoint = train_agent.save(tune.get_trial_dir())
-    # checkpoint = train_agent.save()
-    # print(checkpoint)
-    # print("===" * 10, "Train", "===" * 10)
-    train_agent.stop()
+            history_results.append(train_results)
+            tune.report(**train_results)
+
+        # for results in history_results:
+        #     tune.report(**results)
+
+        agent.save()
+        # checkpoint = agent.save(f"{tune.get_trial_dir()}_{i}")
+        del agent
+        # agent.stop()
 
     # Manual Eval
     # config["num_workers"] = 0
@@ -107,9 +103,6 @@ if __name__ == "__main__":
     parser.add_argument("--expt-name", type=str, default=None)
     args = parser.parse_args()
 
-    ray.shutdown()
-    ray.init(log_to_driver=False, num_gpus=0)
-
     if len(glob.glob(f"./data/{args.ticker}/*.csv")) != 0:
         data = DataLoader.load_data(f"./data/{args.ticker}_ohlcv.csv")
         features = DataLoader.load_data(f"./data/{args.ticker}_features.csv")
@@ -120,10 +113,12 @@ if __name__ == "__main__":
         data.to_csv(f"./data/{args.ticker}/ohlcv.csv")
         features.to_csv(f"./data/{args.ticker}/features.csv")
 
+    ray.shutdown()
+    ray.init(log_to_driver=False, num_cpus=4, num_gpus=0)
     agent_class, config = get_agent_class(args.algo)
 
-    timelog = f"{datetime.date(datetime.now())}_{datetime.time(datetime.now())}".split(".")[0].replace(":", "-")
-    print(timelog)
+    experiment_name = f"{args.algo}_{datetime.date(datetime.now())}_{datetime.time(datetime.now())}".split(".")[0].replace(":", "-")
+    print(experiment_name)
 
     reporter = CLIReporter(
         {
@@ -138,7 +133,7 @@ if __name__ == "__main__":
     user_config = {
         "env": "DescTradingEnv",
         "model": {
-            "fcnet_hiddens": [256, 64],
+            "fcnet_hiddens": [64, 64],
         },
         "evaluation_num_workers": 1,
         "evaluation_interval": 1,
@@ -149,12 +144,13 @@ if __name__ == "__main__":
         "timesteps_per_iteration": 5000,
         "num_gpus": 0,
         "seed": 3407,
-        "_timesteps_total": 50000,
+        "_timesteps_total": 10000,
         "_agent_class": agent_class,
         "_data": data,
         "_features": features,
-        "_window_size": 9,
+        "_window_size": 5,
         "_reward_func": equity_log_return_reward,
+        "_n_splits": 2,
     }
     config.update(user_config)
 
@@ -164,12 +160,13 @@ if __name__ == "__main__":
         resources_per_trial=agent_class.default_resource_request(config),
         progress_reporter=reporter,
         local_dir="./experiments",
-        name=timelog,
+        name=experiment_name,
         verbose=1,
+        reuse_actors=True,
     )
 
     all_dfs = analysis.trial_dataframes
     print(all_dfs)
 
-    ray.shutdown()
     send_line_notification("Lab | Training Finished")
+    ray.shutdown()

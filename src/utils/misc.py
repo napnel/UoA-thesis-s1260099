@@ -112,6 +112,11 @@ def get_agent_class(algo: str):
 
         return sac.SACTrainer, sac.DEFAULT_CONFIG.copy()
 
+    elif algo == "DDPG":
+        from ray.rllib.agents import ddpg
+
+        return ddpg.DDPGTrainer, ddpg.DEFAULT_CONFIG.copy()
+
     else:
         raise ValueError
 

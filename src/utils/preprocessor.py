@@ -1,8 +1,12 @@
 import warnings
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+from typing import Tuple
+
 import numpy as np
 import pandas as pd
-from typing import Tuple
 from sklearn.preprocessing import StandardScaler, PowerTransformer
+from sklearn.model_selection import train_test_split
 
 from ta.trend import sma_indicator, MACD, ADXIndicator, STCIndicator, ema_indicator
 from ta.momentum import RSIIndicator, StochRSIIndicator
@@ -98,7 +102,7 @@ class Preprocessor:
         return data, features.sort_index(axis=1)
 
     @classmethod
-    def train_test_split(
+    def time_train_test_split(
         self,
         data: pd.DataFrame,
         features: pd.DataFrame,
@@ -114,6 +118,49 @@ class Preprocessor:
 
         features_train = features.loc[train_start:train_end]
         features_eval = features.loc[eval_start:eval_end]
+
+        if scaling:
+            scaler = StandardScaler()
+            features_train = pd.DataFrame(scaler.fit_transform(features_train), index=features_train.index, columns=features_train.columns)
+            features_eval = pd.DataFrame(scaler.transform(features_eval), index=features_eval.index, columns=features_eval.columns)
+
+        return data_train, features_train, data_eval, features_eval
+
+    @classmethod
+    def blocked_cross_validation(
+        self,
+        data: pd.DataFrame,
+        features: pd.DataFrame,
+        n_splits: int = 5,
+        train_years: int = 5,
+        eval_years: int = 1,
+        train_start: str = "2010-01-01",
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        train_start = datetime.strptime(train_start, "%Y-%m-%d")
+        for fold_idx in range(n_splits):
+            train_end = train_start + relativedelta(years=train_years)
+            eval_start = train_start + relativedelta(years=train_years)
+            eval_end = eval_start + relativedelta(years=eval_years)
+
+            data_train = data.loc[train_start:train_end]
+            data_eval = data.loc[eval_start:eval_end]
+            features_train = features.loc[train_start:train_end]
+            features_eval = features.loc[eval_start:eval_end]
+            yield data_train, features_train, data_eval, features_eval
+
+            train_start = train_start + relativedelta(years=1)
+
+    @classmethod
+    def train_test_split(
+        self,
+        data: pd.DataFrame,
+        features: pd.DataFrame,
+        test_size: float = 0.2,
+        scaling: bool = True,
+    ):
+        # assert (data.index == features.index).all(), f"{data.index}, {features.index}"
+        data_train, data_eval = train_test_split(data, test_size=test_size, shuffle=False)
+        features_train, features_eval = train_test_split(data, test_size=test_size, shuffle=False)
 
         if scaling:
             scaler = StandardScaler()

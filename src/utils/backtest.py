@@ -1,10 +1,12 @@
 import os
 import warnings
 import pandas as pd
+from pprint import pprint
 from typing import Optional
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", UserWarning)
+    import backtesting
     from backtesting import Strategy, Backtest
 
 
@@ -22,49 +24,70 @@ class DRLStrategy(Strategy):
 
         else:
             assert self.data.Close[-1] == self.env.closing_price, self.debug()
-            assert self._broker._cash == self.env.wallet.assets, self.debug()
-            assert self.equity == self.env.wallet.equity, self.debug()
+            assert self._broker._cash == self.env.assets, self.debug()
+            assert self.equity == self.env.equity, self.debug()
             # action, _ = self.agent.predict(self.env.observation, deterministic=True)
             if self.agent == "Random":
                 action = self.env.action_space.sample()
             elif self.agent == "Buy&Hold":
                 action = self.env.actions.Buy.value
+            elif self.agent == "Sell&Hold":
+                action = self.env.actions.Sell.value
             elif self.agent:
                 action = self.agent.compute_single_action(self.env.observation, explore=False)
             # do Trade
-
-            exec_trade = []
-
-            if self.env.next_done:
+            self.env.action = action
+            if self.env.done:
                 self.position.close()
 
             elif action == self.env.actions.Buy.value and not self.position.is_long:
                 if self.position.is_short:
                     self.position.close()
                 else:
-                    exec_trade.append(self.buy)
+                    self.buy(sl=self.env.sl_price)
+                # exec_trade.append(self.buy)
 
             elif action == self.env.actions.Sell.value and not self.position.is_short:
                 if self.position.is_long:
                     self.position.close()
                 else:
-                    exec_trade.append(self.sell)
+                    self.sell(sl=self.env.sl_price)
 
+            # self.render()
             self.observation, _, self.done, _ = self.env.step(action)
-            for trade in exec_trade:
-                if self.env.position.size != 0:
-                    trade(size=abs(self.env.position.size))
 
     def debug(self):
         print("===" * 10, "DEBUG", "===" * 10)
         print("Env Step: ", self.env.current_step)
-        print("Env Price: ", self.env.closing_price, "| Backtest Price: ", self.data.Close[-1])
-        print("Env Equity: ", self.env.wallet.equity, "| Backtest Equity: ", self.equity)
-        print("Env Assets: ", self.env.wallet.assets, "| Backtest Assets: ", self._broker._cash)
         print("Env Position: ", self.env.position, "| Backtest Position: ", self.position)
-        print("Backtest Trades: ", self.trades)
+        print("Env Price: ", self.env.closing_price, "| Backtest Price: ", self.data.Close[-1])
+        print("Env Equity: ", self.env.equity, "| Backtest Equity: ", self.equity)
+        print("Env Assets: ", self.env.assets, "| Backtest Assets: ", self._broker._cash)
         print("===" * 10, "=====", "===" * 10)
         return "See Debug Above"
+
+    def render(self):
+        print("===" * 5, f"Backtesting ({self.data.index[-1]})", "===" * 5)
+        print(f"Price: {self.data.Close[-1]}")
+        print(f"Assets: {self._broker._cash}")
+        print(f"Equity: {self.equity}")
+        # print(f"Orders: {self.orders}")
+        # print(f"Trades: {self.trades}")
+        # print(f"Position: {self.position}")
+        # print(f"Closed Trades: {self.closed_trades}")
+        # print("Orders")
+        # for order in self.orders:
+        #     print(order)
+        #     if order.parent_trade:
+        #         print(order.parent_trade)
+        #         print(order.parent_trade.sl)
+        #         print(order.parent_trade._sl_order)
+        # print("###" * 10)
+        # print("###" * 10)
+        # for trade in self.trades:
+        #     print(trade)
+        #     print(trade.sl)
+        # print("###" * 10)
 
 
 def backtest(
@@ -75,11 +98,12 @@ def backtest(
 ) -> pd.DataFrame:
 
     bt = Backtest(
-        env.df,
+        env.data,
         DRLStrategy,
-        cash=env.wallet.initial_assets,
+        cash=env.initial_assets,
         commission=env.fee,
         trade_on_close=True,
+        # hedging=True,
     )
     stats = bt.run(env=env, agent=agent)
 
@@ -105,6 +129,6 @@ def backtest(
         equity_curve.to_csv(os.path.join(save_dir, "equity_curve.csv"))
         trades.to_csv(os.path.join(save_dir, "trades.csv"), index=False)
         if plot:
-            bt.plot(filename=os.path.join(save_dir, "backtest"))
+            bt.plot(filename=os.path.join(save_dir, "backtest"), superimpose=False)
 
     return stats

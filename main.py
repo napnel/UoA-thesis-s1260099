@@ -28,7 +28,7 @@ def main(args):
         data.to_csv(f"./data/{args.ticker}_ohlcv.csv")
         features.to_csv(f"./data/{args.ticker}_features.csv")
 
-    data_train, features_train, data_eval, features_eval = Preprocessor.train_test_split(
+    data_train, features_train, data_eval, features_eval = Preprocessor.time_train_test_split(
         data,
         features,
         train_start="2009-01-01",
@@ -42,7 +42,7 @@ def main(args):
     user_config = {
         "env": "DescTradingEnv",
         "env_config": {
-            "df": data_train,
+            "data": data_train,
             "features": features_train,
             "reward_func": reward_func,
             "window_size": args.window_size,
@@ -55,7 +55,7 @@ def main(args):
         "evaluation_num_episodes": 10,
         "evaluation_config": {
             "env_config": {
-                "df": data_eval,
+                "data": data_eval,
                 "features": features_eval,
                 "reward_func": reward_func,
                 "window_size": args.window_size,
@@ -94,7 +94,8 @@ def main(args):
     max_episode_reward_mean = -1
     while True:
         result = agent.train()
-        print(pretty_print(clean_result(result)))
+        print(pretty_print(result))
+        # print(pretty_print(clean_result(result)))
         if result["evaluation"]["episode_reward_mean"] > max_episode_reward_mean:
             max_episode_reward_mean = result["evaluation"]["episode_reward_mean"]
             best_checkpoint = agent.save(os.path.join(agent.logdir, "best"))

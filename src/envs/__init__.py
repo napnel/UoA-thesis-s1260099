@@ -1,6 +1,6 @@
 from ray.tune.registry import register_env
-
-from src.envs.trading_env import DescTradingEnv, ContTradingEnv
+from src.envs.trading_env import DescTradingEnv, ContTradingEnv, MarketMakingEnv
 
 register_env("DescTradingEnv", lambda env_config: DescTradingEnv(**env_config))
 register_env("ContTradingEnv", lambda env_config: ContTradingEnv(**env_config))
+register_env("MarketMakingEnv", lambda env_config: MarketMakingEnv(**env_config))

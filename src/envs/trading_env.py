@@ -10,14 +10,15 @@ from src.envs.reward_func import profit_per_tick_reward
 class DescTradingEnv(BaseTradingEnv):
     def __init__(
         self,
-        df: pd.DataFrame,
+        data: pd.DataFrame,
         features: pd.DataFrame,
         window_size: int = 5,
         fee: float = 0.001,
         reward_func: Callable = profit_per_tick_reward,
+        stop_loss: bool = False,
         actions: Enum = Actions,
     ):
-        super(DescTradingEnv, self).__init__(df, features, window_size, fee, reward_func)
+        super(DescTradingEnv, self).__init__(data, features, window_size, fee, reward_func, stop_loss)
         self.actions = actions
         self.action_space = spaces.Discrete(len(actions))
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.window_size, self.observation_size), dtype=np.float32)
@@ -32,13 +33,13 @@ class DescTradingEnv(BaseTradingEnv):
 class ContTradingEnv(BaseTradingEnv):
     def __init__(
         self,
-        df: pd.DataFrame,
+        data: pd.DataFrame,
         features: pd.DataFrame,
         window_size: int = 20,
         fee: float = 0.001,
         reward_func: Callable = profit_per_tick_reward,
     ):
-        super(ContTradingEnv, self).__init__(df, features, window_size, fee, reward_func)
+        super(ContTradingEnv, self).__init__(data, features, window_size, fee, reward_func)
         self.action_space = spaces.Box(low=-1, high=1, dtype=np.float32)
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.window_size, self.observation_size), dtype=np.float32)
 
@@ -68,7 +69,7 @@ class ContTradingEnv(BaseTradingEnv):
         # Trade End
 
         self.current_step += 1
-        self.next_done = True if self.current_step >= len(self.df) - 3 else False
+        self.next_done = True if self.current_step >= len(self.data) - 3 else False
 
         self.observation = self.next_observation
         self.reward = self.reward_func(self)
@@ -84,3 +85,54 @@ class ContTradingEnv(BaseTradingEnv):
             axis=1,
         )
         return observation
+
+
+class MarketMakingEnv(BaseTradingEnv):
+    def __init__(
+        self,
+        data: pd.DataFrame,
+        features: pd.DataFrame,
+        window_size: int = 10,
+        fee: float = 0.001,
+        reward_func: Callable = profit_per_tick_reward,
+    ):
+        super(MarketMakingEnv, self).__init__(data, features, window_size, fee, reward_func)
+        self.action_space = spaces.Box(low=-5, high=5, dtype=np.float32, shape=(1,))
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.window_size, self.observation_size), dtype=np.float32)
+
+    def reset(self):
+        return super(MarketMakingEnv, self).reset()
+
+    def step(self, action):
+        print(action)
+        self.action = action.squeeze()
+
+        # Trade Start
+        if self.next_done:
+            self.done = True
+            self.position.close()
+
+        elif self.action > 0 and not self.position.is_long:
+            self.buy()
+            # self.buy(size=1)
+            # self.buy(stop_loss=self.data["Close"][self.current_step - self.window_size : self.current_step].min() * (1 - 0.005))
+
+        elif self.action < 0 and not self.position.is_short:
+            self.sell()
+            # self.sell(size=1)
+            # self.sell(stop_loss=self.data["Close"][self.current_step - self.window_size : self.current_step].max() * (1 + 0.005))
+
+        # Trade End
+
+        self.current_step += 1
+
+        self.judge_stop_loss()
+
+        self.equity_curve.append(self.wallet.equity)
+        self.next_done = True if self.current_step >= len(self.data) - 3 else False
+
+        self.observation = self.next_observation
+        self.reward = self.reward_func(self)
+        self.info = {}
+
+        return self.observation, self.reward, self.done, self.info
