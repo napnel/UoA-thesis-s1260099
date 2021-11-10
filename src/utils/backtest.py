@@ -13,6 +13,7 @@ with warnings.catch_warnings():
 class DRLStrategy(Strategy):
     env = None
     agent = None
+    debug = False
 
     def init(self):
         self.observation = self.env.reset()
@@ -44,16 +45,18 @@ class DRLStrategy(Strategy):
                 if self.position.is_short:
                     self.position.close()
                 else:
-                    self.buy(sl=self.env.sl_price)
+                    self.buy(size=self.env.trade_size, sl=self.env.sl_price)
                 # exec_trade.append(self.buy)
 
             elif action == self.env.actions.Sell.value and not self.position.is_short:
                 if self.position.is_long:
                     self.position.close()
                 else:
-                    self.sell(sl=self.env.sl_price)
+                    self.sell(size=self.env.trade_size, sl=self.env.sl_price)
 
-            # self.render()
+            if self.debug:
+                self.render()
+
             self.observation, _, self.done, _ = self.env.step(action)
 
     def debug(self):
@@ -71,23 +74,10 @@ class DRLStrategy(Strategy):
         print(f"Price: {self.data.Close[-1]}")
         print(f"Assets: {self._broker._cash}")
         print(f"Equity: {self.equity}")
-        # print(f"Orders: {self.orders}")
-        # print(f"Trades: {self.trades}")
-        # print(f"Position: {self.position}")
-        # print(f"Closed Trades: {self.closed_trades}")
-        # print("Orders")
-        # for order in self.orders:
-        #     print(order)
-        #     if order.parent_trade:
-        #         print(order.parent_trade)
-        #         print(order.parent_trade.sl)
-        #         print(order.parent_trade._sl_order)
-        # print("###" * 10)
-        # print("###" * 10)
-        # for trade in self.trades:
-        #     print(trade)
-        #     print(trade.sl)
-        # print("###" * 10)
+        print(f"Orders: {self.orders}")
+        print(f"Trades: {self.trades}")
+        print(f"Position: {self.position}")
+        print(f"Closed Trades: {self.closed_trades}")
 
 
 def backtest(
@@ -105,7 +95,7 @@ def backtest(
         trade_on_close=True,
         # hedging=True,
     )
-    stats = bt.run(env=env, agent=agent)
+    stats = bt.run(env=env, agent=agent, debug=False)
 
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)

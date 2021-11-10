@@ -299,6 +299,7 @@ class BaseTradingEnv(gym.Env):
         fee: float = 0.001,
         reward_func: Callable = equity_log_return_reward,
         stop_loss: bool = False,
+        debug: bool = False,
     ):
         """ """
         assert len(data) == len(features)
@@ -308,9 +309,12 @@ class BaseTradingEnv(gym.Env):
         self.window_size = window_size
         self.reward_func = reward_func
         self.stop_loss = stop_loss
+        self.debug = debug
+
         self.current_step = 0
         self.initial_assets = 100000
         self.assets = self.initial_assets
+        self.trade_size = self.assets // self.data["High"].max()
         self.position: Optional[Position] = Position(self)
         self.orders: List[Order] = []
         self.trades: List[Trade] = []
@@ -330,6 +334,7 @@ class BaseTradingEnv(gym.Env):
         self.reward = 0
         self.current_step = self.window_size
         self.assets = self.initial_assets
+        self.trade_size = self.assets // self.data["High"].max()
         self.position = Position(self)
         self.orders = []
         self.trades = []
@@ -353,27 +358,24 @@ class BaseTradingEnv(gym.Env):
             if self.position.is_short:
                 self.position.close()
             else:
-                # self.buy()
-                self.buy(sl=self.sl_price)
-                # self.buy(size=1)
+                self.buy(size=self.trade_size, sl=self.sl_price)
 
         elif self.action == Actions.Sell.value and not self.position.is_short:
             if self.position.is_long:
                 self.position.close()
             else:
-                # self.sell()
-                # self.sell(size=1)
-                self.sell(sl=self.sl_price)
-            # self.sell(stop_loss=self.data["Close"][self.current_step - self.window_size : self.current_step].max() * (1 + 0.005))
+                self.sell(size=self.trade_size, sl=self.sl_price)
 
+        if self.debug:
+            self.render()
         # Trade End
         self.current_step += 1
         self._process_orders()
 
         # self.equity_curve.append(self.wallet.equity)
         self.equity_curve.append(self.equity)
-        # if self.wallet.equity <= 0:
-        #     self.next_done = True
+        if self.equity <= 0:
+            self.next_done = True
 
         self.next_done = True if self.current_step >= len(self.data) - 3 else False
 
@@ -386,13 +388,12 @@ class BaseTradingEnv(gym.Env):
     def render(self, mode="human"):
         print("===" * 5, f"Environment ({self.current_time})", "===" * 5)
         print(f"Price: {self.closing_price}")
-        # print(f"Stop Price: {self.sl_price}")
         print(f"Assets: {self.assets}")
         print(f"Equity: {self.equity}")
-        # print(f"Orders: {self.orders}")
-        # print(f"Trades: {self.trades}")
-        # print(f"Position: {self.position}")
-        # print(f"Closed Trades: {self.closed_trades}")
+        print(f"Orders: {self.orders}")
+        print(f"Trades: {self.trades}")
+        print(f"Position: {self.position}")
+        print(f"Closed Trades: {self.closed_trades}")
         print(f"Action: {self.action}, Reward: {self.reward}, Done: {self.done}\n")
 
     class __FULL_EQUITY(float):
