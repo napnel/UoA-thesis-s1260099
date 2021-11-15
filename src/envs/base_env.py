@@ -1,4 +1,6 @@
+from argparse import Action
 import gym
+from gym import spaces
 import numpy as np
 import pandas as pd
 import sys
@@ -11,10 +13,55 @@ from typing import Optional, Dict, Callable, List, Union
 from src.envs.reward_func import equity_log_return_reward
 
 
-class Actions(Enum):
+class BS(Enum):
     Sell = 0
     Buy = 1
     # Neutral = 2
+    def perform(env: "BaseTradingEnv", action):
+        if action == BS.Sell.value:
+            if env.position.is_long:
+                env.position.close()
+            elif env.position.is_short:
+                pass
+            else:
+                env.sell(size=env.trade_size, sl=env.sl_price)
+
+        elif action == BS.Buy.value:
+            if env.position.is_short:
+                env.position.close()
+            elif env.position.is_long:
+                pass
+            else:
+                env.buy(size=env.trade_size, sl=env.sl_price)
+        else:
+            raise ValueError
+
+
+class LNS(Enum):
+    Short = -1
+    Neutral = 0
+    Long = 1
+
+    def perform(env: "BaseTradingEnv", action):
+        action = action - 1
+        if action == LNS.Short.value:
+            if env.position.is_long:
+                env.position.close()
+                env.sell(size=env.trade_size, sl=env.sl_price)
+            elif env.position.size == 0:
+                env.sell(size=env.trade_size, sl=env.sl_price)
+
+        elif action == LNS.Neutral.value:
+            env.position.close()
+
+        elif action == LNS.Long.value:
+            if env.position.is_short:
+                env.position.close()
+                env.buy(size=env.trade_size, sl=env.sl_price)
+            elif env.position.size == 0:
+                env.buy(size=env.trade_size, sl=env.sl_price)
+        else:
+            raise ValueError
 
 
 class Position:
@@ -298,6 +345,7 @@ class BaseTradingEnv(gym.Env):
         window_size: int = 5,
         fee: float = 0.001,
         reward_func: Callable = equity_log_return_reward,
+        actions: Enum = BS,
         stop_loss: bool = False,
         debug: bool = False,
     ):
@@ -308,6 +356,7 @@ class BaseTradingEnv(gym.Env):
         self.fee = fee
         self.window_size = window_size
         self.reward_func = reward_func
+        self.actions = actions
         self.stop_loss = stop_loss
         self.debug = debug
 
@@ -321,8 +370,8 @@ class BaseTradingEnv(gym.Env):
         self.closed_trades: List[Trade] = []
         self.observation_size = len(self.features.columns) + 1
 
-        self.action_space = None
-        self.observation_space = None
+        self.action_space = spaces.Discrete(len(actions))
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.window_size, self.observation_size), dtype=np.float32)
 
         self._leverage = 1
         self._hedging = False
@@ -354,17 +403,8 @@ class BaseTradingEnv(gym.Env):
             self.done = True
             self.position.close()
 
-        elif self.action == Actions.Buy.value and not self.position.is_long:
-            if self.position.is_short:
-                self.position.close()
-            else:
-                self.buy(size=self.trade_size, sl=self.sl_price)
-
-        elif self.action == Actions.Sell.value and not self.position.is_short:
-            if self.position.is_long:
-                self.position.close()
-            else:
-                self.sell(size=self.trade_size, sl=self.sl_price)
+        else:
+            self.actions.perform(self, action)
 
         if self.debug:
             self.render()
@@ -372,9 +412,8 @@ class BaseTradingEnv(gym.Env):
         self.current_step += 1
         self._process_orders()
 
-        # self.equity_curve.append(self.wallet.equity)
         self.equity_curve.append(self.equity)
-        if self.equity <= 0:
+        if self.equity < self.closing_price:
             self.next_done = True
 
         self.next_done = True if self.current_step >= len(self.data) - 3 else False
@@ -667,9 +706,9 @@ class BaseTradingEnv(gym.Env):
 
         m = self.data["Low"][self.current_step - self.window_size : self.current_step + 1].min()
         M = self.data["High"][self.current_step - self.window_size : self.current_step + 1].max()
-        if self.action == Actions.Sell.value:
+        if self.action == self.actions.Sell.value:
             sl = M * (1 + 0.01)
-        elif self.action == Actions.Buy.value:
+        elif self.action == self.actions.Buy.value:
             sl = m * (1 - 0.01)
         else:
             sl = None

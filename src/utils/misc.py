@@ -87,38 +87,32 @@ def visualize_network(agent, device="cpu", policy_id="default_policy"):
 
 
 def get_agent_class(algo: str):
+    from ray.rllib.agents import dqn, a3c, ppo, sac, ddpg
+
     if algo == "DQN":
-        from ray.rllib.agents import dqn
-
-        return dqn.DQNTrainer, dqn.DEFAULT_CONFIG.copy()
-
-    elif algo == "Rainbow":
-        from ray.rllib.agents import dqn
-
-        return dqn.DQNTrainer, dqn.DEFAULT_CONFIG.copy()
+        agent = dqn.DQNTrainer
+        config = dqn.DEFAULT_CONFIG.copy()
 
     elif algo == "A2C":
-        from ray.rllib.agents import a3c
-
-        return a3c.A2CTrainer, a3c.DEFAULT_CONFIG.copy()
+        agent = a3c.A2CTrainer
+        config = a3c.DEFAULT_CONFIG.copy()
 
     elif algo == "PPO":
-        from ray.rllib.agents import ppo
-
-        return ppo.PPOTrainer, ppo.DEFAULT_CONFIG.copy()
+        agent = ppo.PPOTrainer
+        config = ppo.DEFAULT_CONFIG.copy()
 
     elif algo == "SAC":
-        from ray.rllib.agents import sac
-
-        return sac.SACTrainer, sac.DEFAULT_CONFIG.copy()
+        agent = sac.SACTrainer
+        config = sac.DEFAULT_CONFIG.copy()
 
     elif algo == "DDPG":
-        from ray.rllib.agents import ddpg
-
-        return ddpg.DDPGTrainer, ddpg.DEFAULT_CONFIG.copy()
+        agent = ddpg.DDPGTrainer
+        config = ddpg.DEFAULT_CONFIG.copy()
 
     else:
         raise ValueError
+
+    return agent, config
 
 
 def get_env(env_name: str, env_config={}):

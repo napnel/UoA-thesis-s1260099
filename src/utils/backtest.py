@@ -24,16 +24,16 @@ class DRLStrategy(Strategy):
             pass
 
         else:
-            assert self.data.Close[-1] == self.env.closing_price, self.debug()
-            assert self._broker._cash == self.env.assets, self.debug()
-            assert self.equity == self.env.equity, self.debug()
+            assert self.data.Close[-1] == self.env.closing_price, self.error()
+            assert self._broker._cash == self.env.assets, self.error()
+            assert self.equity == self.env.equity, self.error()
             # action, _ = self.agent.predict(self.env.observation, deterministic=True)
             if self.agent == "Random":
                 action = self.env.action_space.sample()
             elif self.agent == "Buy&Hold":
-                action = self.env.actions.Buy.value
+                action = 2 if len(self.env.actions) == 3 else 1
             elif self.agent == "Sell&Hold":
-                action = self.env.actions.Sell.value
+                action = 0 if len(self.env.actions) == 2 else 0
             elif self.agent:
                 action = self.agent.compute_single_action(self.env.observation, explore=False)
             # do Trade
@@ -41,25 +41,15 @@ class DRLStrategy(Strategy):
             if self.env.done:
                 self.position.close()
 
-            elif action == self.env.actions.Buy.value and not self.position.is_long:
-                if self.position.is_short:
-                    self.position.close()
-                else:
-                    self.buy(size=self.env.trade_size, sl=self.env.sl_price)
-                # exec_trade.append(self.buy)
-
-            elif action == self.env.actions.Sell.value and not self.position.is_short:
-                if self.position.is_long:
-                    self.position.close()
-                else:
-                    self.sell(size=self.env.trade_size, sl=self.env.sl_price)
+            else:
+                self.env.actions.perform(self, action)
 
             if self.debug:
                 self.render()
 
             self.observation, _, self.done, _ = self.env.step(action)
 
-    def debug(self):
+    def error(self):
         print("===" * 10, "DEBUG", "===" * 10)
         print("Env Step: ", self.env.current_step)
         print("Env Position: ", self.env.position, "| Backtest Position: ", self.position)
@@ -78,6 +68,14 @@ class DRLStrategy(Strategy):
         print(f"Trades: {self.trades}")
         print(f"Position: {self.position}")
         print(f"Closed Trades: {self.closed_trades}")
+
+    @property
+    def trade_size(self):
+        return self.env.trade_size
+
+    @property
+    def sl_price(self):
+        return self.env.sl_price
 
 
 def backtest(
@@ -115,7 +113,7 @@ def backtest(
         equity_curve = stats.loc["_equity_curve"]
         trades = stats.loc["_trades"]
 
-        performance.to_csv(os.path.join(save_dir, "performance.csv"), header=False)
+        performance.to_csv(os.path.join(save_dir, "performance.csv"))
         equity_curve.to_csv(os.path.join(save_dir, "equity_curve.csv"))
         trades.to_csv(os.path.join(save_dir, "trades.csv"), index=False)
         if plot:

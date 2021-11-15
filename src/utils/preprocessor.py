@@ -53,13 +53,12 @@ class Preprocessor:
 
         # features["log_return"] = data["Close"].apply(np.log1p).diff()
         features["rate_of_return"] = close.pct_change()
-        features["volume"] = (volume * close).apply(np.log1p)
+        features["volume"] = volume.apply(np.log1p)
         features["candle_value"] = ((close - open) / (high - low)).fillna(0)
         features["true_range"] = pd.concat([np.abs(high - prev_close), np.abs(low - prev_close)], axis=1).max(axis=1) / prev_close
         features["gap_range"] = np.abs(open - prev_close) / prev_close
         features["day_range"] = (high - low) / prev_close
         features["shadow_range"] = ((high - low) - np.abs(open - close)) / prev_close
-        features["market_impact"] = (features["true_range"] / features["volume"]).replace([np.inf, -np.inf], 0)
         features = features.fillna(0)
         aggregated_periods = [5, 10, 20, 50, 100, 200]
 
@@ -74,7 +73,6 @@ class Preprocessor:
             features[f"day_range_{period}"] = features["day_range"].rolling(period).mean()
             features[f"shadow_range_{period}"] = features["shadow_range"].rolling(period).mean()
             features[f"hl_range_{period}"] = high.rolling(period).max() - low.rolling(period).min()
-            features[f"market_impact_{period}"] = features["market_impact"].rolling(period).mean()
 
         # Trend Indicators
         # macd = MACD(data["Close"], window_slow=26, window_fast=12, window_sign=9)
@@ -135,6 +133,7 @@ class Preprocessor:
         train_years: int = 5,
         eval_years: int = 1,
         train_start: str = "2010-01-01",
+        scaling: bool = True,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         train_start = datetime.strptime(train_start, "%Y-%m-%d")
         for fold_idx in range(n_splits):
@@ -146,6 +145,12 @@ class Preprocessor:
             data_eval = data.loc[eval_start:eval_end]
             features_train = features.loc[train_start:train_end]
             features_eval = features.loc[eval_start:eval_end]
+
+            if scaling:
+                scaler = StandardScaler()
+                features_train = pd.DataFrame(scaler.fit_transform(features_train), index=features_train.index, columns=features_train.columns)
+                features_eval = pd.DataFrame(scaler.transform(features_eval), index=features_eval.index, columns=features_eval.columns)
+
             yield data_train, features_train, data_eval, features_eval
 
             train_start = train_start + relativedelta(years=1)

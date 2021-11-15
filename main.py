@@ -8,7 +8,7 @@ from ray.rllib.agents import ppo
 from ray.rllib.models import ModelCatalog
 from ray.tune.logger import pretty_print
 
-from src.envs.trading_env import DescTradingEnv
+from src.envs import BaseTradingEnv
 from src.envs.reward_func import equity_log_return_reward
 from src.utils import DataLoader, Preprocessor, backtest
 from src.utils.logger import custom_log_creator, create_log_filename
@@ -40,19 +40,15 @@ def main(args):
 
     reward_func = equity_log_return_reward
     user_config = {
-        "env": "DescTradingEnv",
+        "env": "BaseTradingEnv",
         "env_config": {
             "data": data_train,
             "features": features_train,
             "reward_func": reward_func,
             "window_size": args.window_size,
         },
-        "model": {
-            "fcnet_hiddens": [256, 64],
-        },
-        "evaluation_num_workers": 1,
         "evaluation_interval": 1,
-        "evaluation_num_episodes": 10,
+        "evaluation_num_episodes": 1,
         "evaluation_config": {
             "env_config": {
                 "data": data_eval,
@@ -60,7 +56,7 @@ def main(args):
                 "reward_func": reward_func,
                 "window_size": args.window_size,
             },
-            "explore": True,
+            "explore": False,
         },
         "num_workers": 2,
         "framework": "torch",
@@ -72,18 +68,18 @@ def main(args):
 
     agent_class, config = get_agent_class(args.algo)
     config.update(user_config)
-    if args.algo == "DQN":
-        config["hiddens"] = [64, 16]
+    # if args.algo == "DQN":
+    #     config["hiddens"] = [64, 16]
 
-    if args.algo == "Rainbow":
-        config["hiddens"] = [64, 16]
-        config["noisy"] = True
-        config["n_step"] = 10
-        config["num_atoms"] = 51
+    # if args.algo == "Rainbow":
+    #     config["hiddens"] = [64, 16]
+    #     config["noisy"] = True
+    #     config["n_step"] = 10
+    #     config["num_atoms"] = 51
 
-    if args.algo == "SAC":
-        config["Q_model"] = {"fcnet_hiddens": [256, 64]}
-        config["policy_model"] = {"fcnet_hiddens": [256, 64]}
+    # if args.algo == "SAC":
+    #     config["Q_model"] = {"fcnet_hiddens": [256, 64]}
+    #     config["policy_model"] = {"fcnet_hiddens": [256, 64]}
 
     # log_filename = create_log_filename(args)
     log_filename = args.algo
@@ -105,8 +101,8 @@ def main(args):
 
     last_checkpoint = agent.save()
 
-    env_train = DescTradingEnv(**config["env_config"])
-    env_eval = DescTradingEnv(**config["evaluation_config"]["env_config"])
+    env_train = BaseTradingEnv(**config["env_config"])
+    env_eval = BaseTradingEnv(**config["evaluation_config"]["env_config"])
 
     backtest(env_train, agent, save_dir=os.path.join(agent.logdir, "last-stats-train"), plot=True)
     backtest(env_eval, agent, save_dir=os.path.join(agent.logdir, "last-stats-eval"), plot=True)
