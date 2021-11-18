@@ -57,6 +57,7 @@ class DRLStrategy(Strategy):
         print("Env Equity: ", self.env.equity, "| Backtest Equity: ", self.equity)
         print("Env Assets: ", self.env.assets, "| Backtest Assets: ", self._broker._cash)
         print("===" * 10, "=====", "===" * 10)
+        self.render()
         return "See Debug Above"
 
     def render(self):
@@ -83,6 +84,7 @@ def backtest(
     agent="Random",
     save_dir: Optional[str] = None,
     plot: bool = True,
+    debug: bool = False,
 ) -> pd.DataFrame:
 
     bt = Backtest(
@@ -93,7 +95,7 @@ def backtest(
         trade_on_close=True,
         # hedging=True,
     )
-    stats = bt.run(env=env, agent=agent, debug=False)
+    stats = bt.run(env=env, agent=agent, debug=debug)
 
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)

@@ -345,7 +345,7 @@ class BaseTradingEnv(gym.Env):
         window_size: int = 5,
         fee: float = 0.001,
         reward_func: Callable = equity_log_return_reward,
-        actions: Enum = BS,
+        actions: Enum = LNS,
         stop_loss: bool = False,
         debug: bool = False,
     ):

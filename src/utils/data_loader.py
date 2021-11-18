@@ -1,3 +1,5 @@
+import os
+import glob
 import pandas as pd
 import yfinance as yf
 from typing import Optional
@@ -32,3 +34,21 @@ class DataLoader:
         assert data.index.name == "Date"
         assert list(data.columns.values) == ["Open", "High", "Low", "Close", "Volume"]
         return data
+
+
+    @classmethod
+    def prepare_data(self, ticker: str, data_path: str):
+        from src.utils.preprocessor import Preprocessor
+        data_path = os.path.join(data_path, ticker)
+        # data_path = os.path.join(pathlib.Path(self.logdir).parent.parent, "data", ticker)
+        if len(glob.glob(f"{data_path}/*.csv")) != 0:
+            data = DataLoader.load_data(f"{data_path}/ohlcv.csv")
+            features = DataLoader.load_data(f"{data_path}/features.csv")
+        else:
+            os.makedirs(f"{data_path}", exist_ok=True)
+            data = DataLoader.fetch_data(f"{ticker}", interval="1d")
+            data, features = Preprocessor.extract_features(data)
+            data.to_csv(f"{data_path}/ohlcv.csv")
+            features.to_csv(f"{data_path}/features.csv")
+
+        return data, features

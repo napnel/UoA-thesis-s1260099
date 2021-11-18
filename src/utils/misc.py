@@ -1,6 +1,7 @@
 import os
 import random
 import requests
+import pathlib
 from typing import Any, Dict
 
 import numpy as np
@@ -113,6 +114,63 @@ def get_agent_class(algo: str):
         raise ValueError
 
     return agent, config
+
+
+def prepare_config_for_agent(config: Dict[str, Any], logdir: str):
+    from ray import tune
+    from src.utils import DataLoader, Preprocessor
+
+    algo = config.pop("_algo")
+
+    # Environment Config
+    window_size = config.pop("_window_size", None)
+    fee = config.pop("_fee", None)
+    reward_func = config.pop("_reward_func", None)
+    actions = config.pop("_actions", None)
+    stop_loss = config.pop("_stop_loss", None)
+
+    # Data and Splits Config
+    ticker = config.pop("_ticker")
+    train_start = config.pop("_train_start")
+    train_years = config.pop("_train_years")
+    eval_years = config.pop("_eval_years")
+    index = config.pop(tune.suggest.repeater.TRIAL_INDEX)
+
+    # Divide the data according to the index
+    data, features = DataLoader.prepare_data(ticker, pathlib.Path(logdir).parent)
+    data_train, features_train, data_eval, features_eval = Preprocessor.create_cv_from_index(
+        data,
+        features,
+        index,
+        train_years,
+        eval_years,
+        train_start,
+    )
+
+    config["env_config"] = {
+        "data": data_train,
+        "features": features_train,
+        "window_size": window_size,
+        "fee": fee,
+        "reward_func": reward_func,
+        "actions": actions,
+        "stop_loss": stop_loss,
+    }
+    config["evaluation_config"]["env_config"] = {
+        "data": data_eval,
+        "features": features_eval,
+        "window_size": window_size,
+        "fee": fee,
+        "reward_func": reward_func,
+        "actions": actions,
+        "stop_loss": stop_loss,
+    }
+    config["env_config"] = {k: v for k, v in config["env_config"].items() if v is not None}
+    config["evaluation_config"]["env_config"] = {k: v for k, v in config["evaluation_config"]["env_config"].items() if v is not None}
+
+    agent_class, algo_config = get_agent_class(algo)
+    algo_config.update(config)
+    return agent_class, algo_config
 
 
 def get_env(env_name: str, env_config={}):

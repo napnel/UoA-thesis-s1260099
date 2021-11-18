@@ -156,6 +156,24 @@ class Preprocessor:
             train_start = train_start + relativedelta(years=1)
 
     @classmethod
+    def create_cv_from_index(self, data, features, index, train_years, eval_years, train_start="2010-01-01"):
+        train_start = datetime.strptime(train_start, "%Y-%m-%d") + relativedelta(years=index)
+        train_end = train_start + relativedelta(years=train_years)
+        eval_start = train_end
+        eval_end = eval_start + relativedelta(years=eval_years)
+
+        data_train = data.loc[train_start:train_end]
+        data_eval = data.loc[eval_start:eval_end]
+        features_train = features.loc[train_start:train_end]
+        features_eval = features.loc[eval_start:eval_end]
+
+        scaler = StandardScaler()
+        features_train = pd.DataFrame(scaler.fit_transform(features_train), index=features_train.index, columns=features_train.columns)
+        features_eval = pd.DataFrame(scaler.transform(features_eval), index=features_eval.index, columns=features_eval.columns)
+
+        return data_train, features_train, data_eval, features_eval
+
+    @classmethod
     def train_test_split(
         self,
         data: pd.DataFrame,
