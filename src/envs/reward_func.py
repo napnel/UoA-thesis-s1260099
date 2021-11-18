@@ -3,8 +3,10 @@ from empyrical import sharpe_ratio
 import numpy as np
 import pandas as pd
 
+from src.envs.core.dummy_environment import TradingEnv
 
-def profit_per_trade_reward(env):
+
+def profit_per_trade_reward(env: TradingEnv):
     reward = 0
     if not env.closed_trades.empty and env.position.size == 0:
         if env.closed_trades.iloc[-1]["Steps"] == env.current_step - 1:
@@ -13,22 +15,22 @@ def profit_per_trade_reward(env):
     return reward
 
 
-def profit_per_tick_reward(env):
+def profit_per_tick_reward(env: TradingEnv):
     reward = env.position.pnl_pct
     return reward
 
 
-def equity_log_return_reward(env):
+def equity_log_return_reward(env: TradingEnv):
     reward = np.log(env.equity_curve[-1]) - np.log(env.equity_curve[-2])
     return reward
 
 
-def initial_equity_return_reward(env):
+def initial_equity_return_reward(env: TradingEnv):
     reward = (env.equity_curve[-1] - env.equity_curve[0]) / env.equity_curve[0]
     return reward
 
 
-def sharpe_ratio_reward(env):
+def sharpe_ratio_reward(env: TradingEnv):
     # prev_sharpe_ratio_reward = env.reward
     reward = 0
     prev_returns = pd.Series(env.equity_curve[:-1]).pct_change().dropna()

@@ -1,11 +1,8 @@
 import pathlib
 from typing import Dict, Any
 
-import ray
 from ray import tune
-from ray.rllib.agents import dqn, a3c, ppo, sac, ddpg
-from src.utils import DataLoader, Preprocessor
-from src.utils.misc import prepare_config_for_agent
+from src.trainable.util import prepare_config_for_agent
 
 
 class ExperimentCV(tune.Trainable):

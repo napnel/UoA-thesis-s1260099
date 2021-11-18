@@ -84,6 +84,7 @@ def backtest(
     agent="Random",
     save_dir: Optional[str] = None,
     plot: bool = True,
+    open_browser: bool = True,
     debug: bool = False,
 ) -> pd.DataFrame:
 
@@ -119,6 +120,12 @@ def backtest(
         equity_curve.to_csv(os.path.join(save_dir, "equity_curve.csv"))
         trades.to_csv(os.path.join(save_dir, "trades.csv"), index=False)
         if plot:
-            bt.plot(filename=os.path.join(save_dir, "backtest"), superimpose=False)
+            bt.plot(
+                filename=os.path.join(save_dir, "backtest"),
+                superimpose=False,
+                open_browser=open_browser,
+                plot_return=True,
+                plot_equity=False,
+            )
 
     return stats
