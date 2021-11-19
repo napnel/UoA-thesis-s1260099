@@ -26,7 +26,13 @@ def get_agent_class(algo: str):
         config = dqn.DEFAULT_CONFIG.copy()
 
     elif algo == "A2C":
+        from ray.rllib.agents.a3c.a2c import A2C_DEFAULT_CONFIG
+
         agent = a3c.A2CTrainer
+        config = A2C_DEFAULT_CONFIG.copy()
+
+    elif algo == "A3C":
+        agent = a3c.A3CTrainer
         config = a3c.DEFAULT_CONFIG.copy()
 
     elif algo == "PPO":
@@ -56,9 +62,9 @@ def prepare_config_for_agent(config: Dict[str, Any], logdir: str):
     reward_func: Union[Callable, str] = config.pop("_reward_func", None)
     actions: Union[IntEnum, str] = config.pop("_actions", None)
     stop_loss = config.pop("_stop_loss", None)
-    
+
     # json can't save the class raw.
-    if isinstance(reward_func, str): 
+    if isinstance(reward_func, str):
         reward_func = REWARD_FUNC[reward_func]
     if isinstance(actions, str):
         actions = ACTIONS[actions]
