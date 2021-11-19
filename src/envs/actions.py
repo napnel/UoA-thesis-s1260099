@@ -1,6 +1,4 @@
 from enum import IntEnum
-import gym
-from gym import spaces
 from src.envs.core.dummy_environment import TradingEnv
 
 
@@ -16,7 +14,8 @@ class BuySell(IntEnum):
             elif env.position.is_short:
                 pass
             else:
-                env.sell(size=env.trade_size, sl=env.sl_price)
+                sl = env.latest_high_price if env.stop_loss else None
+                env.sell(size=env.trade_size, sl=sl)
 
         elif action == self.BUY:
             if env.position.is_short:
@@ -24,7 +23,8 @@ class BuySell(IntEnum):
             elif env.position.is_long:
                 pass
             else:
-                env.buy(size=env.trade_size, sl=env.sl_price)
+                sl = env.latest_low_price if env.stop_loss else None
+                env.buy(size=env.trade_size, sl=sl)
         else:
             raise ValueError
 
@@ -42,7 +42,8 @@ class BuyHoldSell(IntEnum):
             elif env.position.is_short:
                 pass
             else:
-                env.sell(size=env.trade_size, sl=env.sl_price)
+                sl = env.latest_high_price if env.stop_loss else None
+                env.sell(size=env.trade_size, sl=sl)
 
         elif action == self.BUY:
             if env.position.is_short:
@@ -50,7 +51,8 @@ class BuyHoldSell(IntEnum):
             elif env.position.is_long:
                 pass
             else:
-                env.buy(size=env.trade_size, sl=env.sl_price)
+                sl = env.latest_low_price if env.stop_loss else None
+                env.buy(size=env.trade_size, sl=sl)
 
         elif action == self.NEUTRAL:
             pass
@@ -65,18 +67,20 @@ class LonglShort(IntEnum):
     @classmethod
     def perform(self, env: "TradingEnv", action: int):
         if action == self.SHORT:
+            sl = env.latest_high_price if env.stop_loss else None
             if env.position.is_long:
                 env.position.close()
-                env.sell(size=env.trade_size, sl=env.sl_price)
+                env.sell(size=env.trade_size, sl=sl)
             elif env.position.size == 0:
-                env.sell(size=env.trade_size, sl=env.sl_price)
+                env.sell(size=env.trade_size, sl=sl)
 
         elif action == self.LONG:
+            sl = env.latest_low_price if env.stop_loss else None
             if env.position.is_short:
                 env.position.close()
-                env.buy(size=env.trade_size, sl=env.sl_price)
+                env.buy(size=env.trade_size, sl=sl)
             elif env.position.size == 0:
-                env.buy(size=env.trade_size, sl=env.sl_price)
+                env.buy(size=env.trade_size, sl=sl)
         else:
             raise ValueError
 
@@ -89,20 +93,22 @@ class LongNeutralShort(IntEnum):
     @classmethod
     def perform(self, env: "TradingEnv", action: int):
         if action == self.SHORT:
+            sl = env.latest_high_price if env.stop_loss else None
             if env.position.is_long:
                 env.position.close()
-                env.sell(size=env.trade_size, sl=env.sl_price)
+                env.sell(size=env.trade_size, sl=sl)
             elif env.position.size == 0:
-                env.sell(size=env.trade_size, sl=env.sl_price)
+                env.sell(size=env.trade_size, sl=sl)
 
         elif action == self.NEUTRAL:
             env.position.close()
 
         elif action == self.LONG:
+            sl = env.latest_low_price if env.stop_loss else None
             if env.position.is_short:
                 env.position.close()
-                env.buy(size=env.trade_size, sl=env.sl_price)
+                env.buy(size=env.trade_size, sl=sl)
             elif env.position.size == 0:
-                env.buy(size=env.trade_size, sl=env.sl_price)
+                env.buy(size=env.trade_size, sl=sl)
         else:
             raise ValueError

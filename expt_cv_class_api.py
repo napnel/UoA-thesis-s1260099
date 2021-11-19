@@ -3,6 +3,7 @@ import pathlib
 import glob
 import random
 import argparse
+from optuna import Trial
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
@@ -72,12 +73,10 @@ if __name__ == "__main__":
         "seed": args.seed,
         "_algo": args.algo,
         "_ticker": args.ticker,
-        
         # Cross-validation Settings
         "_train_start": "2010-01-01",
         "_train_years": args.train_years,
         "_eval_years": args.eval_years,
-        
         # Environment Optional Settings
         "_window_size": args.window_size,
         "_fee": args.fee,
@@ -100,9 +99,14 @@ if __name__ == "__main__":
 
     re_searcher = Repeater(BayesOptSearch(), repeat=args.repeat)
 
+    # def expt_name_creator(args):
+    args_dict = vars(args)
+    expt_name = {}
+    # pass
+
     analysis = tune.run(
         ExperimentCV,
-        name=f"{args.algo}_{timelog}", # algo_EnvSetting
+        name=f"{args.algo}_{timelog}_{args.actions}",  # algo_EnvSetting
         num_samples=args.repeat * args.num_samples,
         metric=args.metric,
         mode=args.mode,
@@ -111,7 +115,7 @@ if __name__ == "__main__":
         progress_reporter=reporter,
         checkpoint_freq=1,
         local_dir=args.local_dir,
-        trial_dirname_creator=lambda trial: str(trial).split("__")[0], # trial index -> target periods
+        trial_dirname_creator=lambda trial: f"{trial.trainable_name}_{trial.config['__trial_index__']}",  # trial index -> target periods
         resources_per_trial=tune.PlacementGroupFactory([{"CPU": 4}, {"CPU": 4}]),
         search_alg=re_searcher,
         verbose=1,

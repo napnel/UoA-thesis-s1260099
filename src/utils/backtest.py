@@ -18,6 +18,7 @@ class DRLStrategy(Strategy):
     def init(self):
         self.observation = self.env.reset()
         self.done = False
+        self.stop_loss = self.env.stop_loss
 
     def next(self):
         if self.data.index[-1] != self.env.current_time or self.done:
@@ -75,8 +76,12 @@ class DRLStrategy(Strategy):
         return self.env.trade_size
 
     @property
-    def sl_price(self):
-        return self.env.sl_price
+    def latest_high_price(self):
+        return self.env.latest_high_price
+
+    @property
+    def latest_low_price(self):
+        return self.env.latest_low_price
 
 
 def backtest(

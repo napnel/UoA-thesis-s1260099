@@ -45,7 +45,7 @@ class TradingEnv(gym.Env):
         self.orders: List[Order] = []
         self.trades: List[Trade] = []
         self.closed_trades: List[Trade] = []
-        self.observation_size = len(self.features.columns) + 1
+        self.observation_size = len(self.features.columns) + 2 if not self.stop_loss else len(self.features.columns) + 3
 
         self.action_space = spaces.Discrete(len(actions))
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.window_size, self.observation_size), dtype=np.float32)
@@ -68,7 +68,7 @@ class TradingEnv(gym.Env):
         self.closed_trades = []
 
         features_obs = self.features.iloc[: self.window_size, :].values
-        account_obs = np.tile([self.position.pnl_pct], (self.window_size, 1))
+        account_obs = np.tile([0, 0], (self.window_size, 1)) if not self.stop_loss else np.tile([0, 0, 0], (self.window_size, 1))
         self.observation = np.hstack((features_obs, account_obs))
         return self.observation
 
@@ -111,6 +111,50 @@ class TradingEnv(gym.Env):
         print(f"Position: {self.position}")
         print(f"Closed Trades: {self.closed_trades}")
         print(f"Action: {self.action}, Reward: {self.reward}, Done: {self.done}\n")
+
+    @property
+    def next_observation(self) -> np.ndarray:
+        long_position_pnl_pct = self.position.pnl_pct if self.position.is_long else 0
+        short_position_pnl_pct = self.position.pnl_pct if self.position.is_short else 0
+        closed_stop_loss_pct = min([abs(self.closing_price - order.stop) / order.stop for order in self.orders]) if len(self.orders) else 0
+        account_obs = (
+            np.array([long_position_pnl_pct, short_position_pnl_pct])
+            if not self.stop_loss
+            else np.array([long_position_pnl_pct, short_position_pnl_pct, closed_stop_loss_pct])
+        )
+
+        next_single_obs = np.hstack((self.features.iloc[self.current_step - 1, :], account_obs))
+        next_observation = np.vstack((self.observation[1:], next_single_obs))
+        return next_observation
+
+    @property
+    def closing_price(self) -> float:
+        return self.data["Close"][self.current_step]
+
+    @property
+    def current_time(self):
+        return self.data.index[self.current_step]
+
+    @property
+    def tech_indicators(self):
+        return self.features.columns.tolist()
+
+    @property
+    def equity(self) -> float:
+        return self.assets + sum(trade.pnl for trade in self.trades)
+
+    @property
+    def margin_available(self) -> float:
+        margin_used = sum(trade.value / self._leverage for trade in self.trades)
+        return max(0, self.equity - margin_used)
+
+    @property
+    def latest_high_price(self):
+        return self.data["High"][self.current_step - self.window_size : self.current_step + 1].max()
+
+    @property
+    def latest_low_price(self):
+        return self.data["Low"][self.current_step - self.window_size : self.current_step + 1].min()
 
     class __FULL_EQUITY(float):
         def __repr__(self):
@@ -348,46 +392,3 @@ class TradingEnv(gym.Env):
             trade.tp = tp
         if sl:
             trade.sl = sl
-
-    @property
-    def next_observation(self) -> np.ndarray:
-        next_single_obs = np.hstack((self.features.iloc[self.current_step - 1, :], self.position.pnl_pct))
-        next_observation = np.vstack((self.observation[1:], next_single_obs))
-        return next_observation
-
-    @property
-    def closing_price(self) -> float:
-        return self.data["Close"][self.current_step]
-
-    @property
-    def current_time(self):
-        return self.data.index[self.current_step]
-
-    @property
-    def tech_indicators(self):
-        return self.features.columns.tolist()
-
-    @property
-    def equity(self) -> float:
-        return self.assets + sum(trade.pnl for trade in self.trades)
-
-    @property
-    def margin_available(self) -> float:
-        margin_used = sum(trade.value / self._leverage for trade in self.trades)
-        return max(0, self.equity - margin_used)
-
-    @property
-    def sl_price(self) -> Optional[float]:
-        if self.stop_loss == False:
-            return None
-
-        m = self.data["Low"][self.current_step - self.window_size : self.current_step + 1].min()
-        M = self.data["High"][self.current_step - self.window_size : self.current_step + 1].max()
-        if self.action == self.actions.Sell.value:
-            sl = M * (1 + 0.01)
-        elif self.action == self.actions.Buy.value:
-            sl = m * (1 - 0.01)
-        else:
-            sl = None
-
-        return sl
