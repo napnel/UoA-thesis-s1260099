@@ -1,13 +1,7 @@
 import os
 import pathlib
-import glob
-import random
 import argparse
-from optuna import Trial
-import pandas as pd
-import matplotlib.pyplot as plt
 from datetime import datetime
-from typing import Dict, List, Any, Optional
 
 import ray
 from ray import tune
@@ -68,7 +62,7 @@ if __name__ == "__main__":
         "num_workers": 4,
         "framework": "torch",
         "log_level": "WARN",
-        "timesteps_per_iteration": 5000,
+        "timesteps_per_iteration": 10000,
         "num_gpus": 0,
         "seed": args.seed,
         "_algo": args.algo,

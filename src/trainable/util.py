@@ -30,10 +30,12 @@ def get_agent_class(algo: str):
 
         agent = a3c.A2CTrainer
         config = A2C_DEFAULT_CONFIG.copy()
+        config["min_iter_time_s"] = 0
 
     elif algo == "A3C":
         agent = a3c.A3CTrainer
         config = a3c.DEFAULT_CONFIG.copy()
+        config["min_iter_time_s"] = 0
 
     elif algo == "PPO":
         agent = ppo.PPOTrainer
