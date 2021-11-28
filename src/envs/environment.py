@@ -117,11 +117,9 @@ class TradingEnv(gym.Env):
         long_position_pnl_pct = self.position.pnl_pct if self.position.is_long else 0
         short_position_pnl_pct = self.position.pnl_pct if self.position.is_short else 0
         closed_stop_loss_pct = min([abs(self.closing_price - order.stop) / order.stop for order in self.orders]) if len(self.orders) else 0
-        account_obs = (
-            np.array([long_position_pnl_pct, short_position_pnl_pct])
-            if not self.stop_loss
-            else np.array([long_position_pnl_pct, short_position_pnl_pct, closed_stop_loss_pct])
-        )
+        account_obs = np.array([long_position_pnl_pct, short_position_pnl_pct])
+        if self.stop_loss:
+            account_obs = np.append(account_obs, closed_stop_loss_pct)
 
         next_single_obs = np.hstack((self.features.iloc[self.current_step - 1, :], account_obs))
         next_observation = np.vstack((self.observation[1:], next_single_obs))

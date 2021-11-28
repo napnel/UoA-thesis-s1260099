@@ -28,6 +28,7 @@ parser.add_argument("--window_size", type=int, default=None)
 parser.add_argument("--fee", type=float, default=None)
 parser.add_argument("--reward_func", type=str, default=None)
 parser.add_argument("--actions", type=str, default=None)
+parser.add_argument("--stop_loss", action="store_true")
 
 # Cross-validation Settings
 parser.add_argument("--repeat", type=int, default=5)
@@ -62,7 +63,7 @@ if __name__ == "__main__":
         "num_workers": 4,
         "framework": "torch",
         "log_level": "WARN",
-        "timesteps_per_iteration": 10000,
+        "timesteps_per_iteration": 5000,
         "num_gpus": 0,
         "seed": args.seed,
         "_algo": args.algo,
@@ -76,10 +77,10 @@ if __name__ == "__main__":
         "_fee": args.fee,
         "_actions": args.actions,
         "_reward_func": args.reward_func,
+        "_stop_loss": args.stop_loss,
         # "lambda": tune.sample_from(lambda spec: random.uniform(0.9, 1.0)),
         # "lr": tune.sample_from(lambda spec: random.uniform(1e-3, 1e-5)),
     }
-    timelog = str(datetime.date(datetime.now())) + "_" + datetime.time(datetime.now()).strftime("%H-%M")
 
     reporter = CLIReporter(
         {
@@ -93,14 +94,16 @@ if __name__ == "__main__":
 
     re_searcher = Repeater(BayesOptSearch(), repeat=args.repeat)
 
-    # def expt_name_creator(args):
-    args_dict = vars(args)
-    expt_name = {}
-    # pass
+    # Create experimental name
+    env_params = str({k: v for k, v in vars(args).items() if k in ["window_size", "fee", "actions", "reward_func", "stop_loss"] and v})
+    env_params = env_params.replace(": ", "=").replace("'", "").replace(", ", "+").replace("{", "_").replace("}", "_") if env_params != "{}" else ""
+    timelog = str(datetime.date(datetime.now())) + "_" + datetime.time(datetime.now()).strftime("%H-%M")
+    expt_name = f"{args.algo}_{env_params}_{timelog}"
+    print(expt_name)
 
     analysis = tune.run(
         ExperimentCV,
-        name=f"{args.algo}_{timelog}_{args.actions}",  # algo_EnvSetting
+        name=expt_name,
         num_samples=args.repeat * args.num_samples,
         metric=args.metric,
         mode=args.mode,
@@ -109,7 +112,7 @@ if __name__ == "__main__":
         progress_reporter=reporter,
         checkpoint_freq=1,
         local_dir=args.local_dir,
-        trial_dirname_creator=lambda trial: f"{trial.trainable_name}_{trial.config['__trial_index__']}",  # trial index -> target periods
+        trial_dirname_creator=lambda trial: f"{trial.trainable_name}_{trial.config['__trial_index__']}",  # To do: trial index -> target periods
         resources_per_trial=tune.PlacementGroupFactory([{"CPU": 4}, {"CPU": 4}]),
         search_alg=re_searcher,
         verbose=1,
@@ -124,7 +127,6 @@ if __name__ == "__main__":
 
         algo_config["num_workers"] = 1
         algo_config["logger_config"] = {"type": ray.tune.logger.NoopLogger}
-        # index = config.pop("__trial_index__")
 
         if agent is None:
             agent = agent_class(config=algo_config)
@@ -137,7 +139,7 @@ if __name__ == "__main__":
         # env_train = agent.workers.local_worker().env
         env_train = TradingEnv(**algo_config["env_config"])
         env_eval = TradingEnv(**algo_config["evaluation_config"]["env_config"])
-        backtest(env_train, agent, save_dir=os.path.join(trial.logdir, "last-stats-train"), plot=True, open_browser=args.debug)
+        backtest(env_train, agent, save_dir=os.path.join(trial.logdir, "best-stats-train"), plot=True, open_browser=args.debug)
         backtest(env_eval, agent, save_dir=os.path.join(trial.logdir, "best-stats-eval"), plot=True)
         backtest(env_eval, agent="Buy&Hold", save_dir=os.path.join(trial.logdir, "buy-and-hold"), plot=False)
 

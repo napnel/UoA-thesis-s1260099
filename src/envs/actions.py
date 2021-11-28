@@ -93,7 +93,7 @@ class LongNeutralShort(IntEnum):
     @classmethod
     def perform(self, env: "TradingEnv", action: int):
         if action == self.SHORT:
-            sl = env.latest_high_price if env.stop_loss else None
+            sl = env.latest_high_price * (1 + 0.01) if env.stop_loss else None
             if env.position.is_long:
                 env.position.close()
                 env.sell(size=env.trade_size, sl=sl)
@@ -104,11 +104,12 @@ class LongNeutralShort(IntEnum):
             env.position.close()
 
         elif action == self.LONG:
-            sl = env.latest_low_price if env.stop_loss else None
+            sl = env.latest_low_price * (1 - 0.01) if env.stop_loss else None
             if env.position.is_short:
                 env.position.close()
                 env.buy(size=env.trade_size, sl=sl)
             elif env.position.size == 0:
                 env.buy(size=env.trade_size, sl=sl)
+
         else:
             raise ValueError
