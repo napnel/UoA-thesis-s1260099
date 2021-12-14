@@ -8,6 +8,7 @@ from src.trainable.util import prepare_config_for_agent
 class ExperimentCV(tune.Trainable):
     def setup(self, config: Dict[str, Any]):
         agent_class, algo_config = prepare_config_for_agent(config, self.logdir)
+        algo_config.pop("_env_test_config")  # When training, test data is not used.
         self.agent = agent_class(config=algo_config)
 
     def step(self):

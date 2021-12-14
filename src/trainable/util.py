@@ -5,6 +5,7 @@ from typing import Callable, Dict, Any
 
 from ray import tune
 from ray.rllib.agents import dqn, a3c, ppo, sac, ddpg
+from sklearn import feature_selection
 from src.utils import DataLoader, Preprocessor
 from src.envs.actions import BuySell, LongNeutralShort
 from src.envs.reward_func import equity_log_return_reward, initial_equity_return_reward
@@ -55,61 +56,42 @@ def get_agent_class(algo: str):
     return agent, config
 
 
-def prepare_config_for_agent(config: Dict[str, Any], logdir: str):
+def prepare_config_for_agent(_config: Dict[str, Any], logdir: str):
+    config = _config.copy()
     algo = config.pop("_algo")
-
-    # Environment Config
-    window_size = config.pop("_window_size", None)
-    fee = config.pop("_fee", None)
-    reward_func: Union[Callable, str] = config.pop("_reward_func", None)
-    actions: Union[IntEnum, str] = config.pop("_actions", None)
-    stop_loss = config.pop("_stop_loss", None)
-
-    # json can't save the class raw.
-    if isinstance(reward_func, str):
-        reward_func = REWARD_FUNC[reward_func]
-    if isinstance(actions, str):
-        actions = ACTIONS[actions]
-
-    # Data and Splits Config
     ticker = config.pop("_ticker")
-    train_start = config.pop("_train_start")
-    train_years = config.pop("_train_years")
-    eval_years = config.pop("_eval_years")
-
+    cv_config = config.pop("_cv_config")
     index = config.pop("__trial_index__")
+
+    if isinstance(config["env_config"]["reward_func"], str):
+        config["env_config"]["reward_func"] = REWARD_FUNC[config["env_config"]["reward_func"]]
+    if isinstance(config["env_config"]["actions"], str):
+        config["env_config"]["actions"] = ACTIONS[config["env_config"]["actions"]]
+
+    config["env_config"] = {k: v for k, v in config["env_config"].items() if v is not None}
+    config["evaluation_config"]["env_config"] = config["env_config"].copy()
+    config["_env_test_config"] = config["env_config"].copy()
 
     # Divide the data according to the index
     data, features = DataLoader.prepare_data(ticker, pathlib.Path(logdir).parent)
-    data_train, features_train, data_eval, features_eval = Preprocessor.create_cv_from_index(
+    data_train, features_train, data_eval, features_eval, data_test, features_test = Preprocessor.create_cv_from_index(
         data,
         features,
         index,
-        train_years,
-        eval_years,
-        train_start,
+        config["env_config"]["window_size"],
+        cv_config["train_years"],
+        cv_config["eval_years"],
+        cv_config["train_start"],
     )
 
-    config["env_config"] = {
-        "data": data_train,
-        "features": features_train,
-        "window_size": window_size,
-        "fee": fee,
-        "reward_func": reward_func,
-        "actions": actions,
-        "stop_loss": stop_loss,
-    }
-    config["evaluation_config"]["env_config"] = {
-        "data": data_eval,
-        "features": features_eval,
-        "window_size": window_size,
-        "fee": fee,
-        "reward_func": reward_func,
-        "actions": actions,
-        "stop_loss": stop_loss,
-    }
-    config["env_config"] = {k: v for k, v in config["env_config"].items() if v is not None}
-    config["evaluation_config"]["env_config"] = {k: v for k, v in config["evaluation_config"]["env_config"].items() if v is not None}
+    config["env_config"]["data"] = data_train
+    config["env_config"]["features"] = features_train
+
+    config["evaluation_config"]["env_config"]["data"] = data_eval
+    config["evaluation_config"]["env_config"]["features"] = features_eval
+
+    config["_env_test_config"]["data"] = data_test
+    config["_env_test_config"]["features"] = features_test
 
     agent_class, algo_config = get_agent_class(algo)
     algo_config.update(config)
