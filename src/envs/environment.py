@@ -45,7 +45,7 @@ class TradingEnv(gym.Env):
         self.orders: List[Order] = []
         self.trades: List[Trade] = []
         self.closed_trades: List[Trade] = []
-        self.observation_size = len(self.features.columns) + 2 if not self.stop_loss else len(self.features.columns) + 3
+        self.observation_size = len(self.features.columns) + 4 if not self.stop_loss else len(self.features.columns) + 5
 
         self.action_space = spaces.Discrete(len(actions))
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.window_size, self.observation_size), dtype=np.float32)
@@ -68,7 +68,7 @@ class TradingEnv(gym.Env):
         self.closed_trades = []
 
         features_obs = self.features.iloc[: self.window_size, :].values
-        account_obs = np.tile([0, 0], (self.window_size, 1)) if not self.stop_loss else np.tile([0, 0, 0], (self.window_size, 1))
+        account_obs = np.tile([0, 0, 1, 1], (self.window_size, 1)) if not self.stop_loss else np.tile([0, 0, 1, 1, 0], (self.window_size, 1))
         self.observation = np.hstack((features_obs, account_obs))
         return self.observation
 
@@ -90,7 +90,7 @@ class TradingEnv(gym.Env):
         self._process_orders()
 
         self.equity_curve.append(self.equity)
-        if self.equity < self.closing_price:
+        if self.equity < self.closing_price * self.trade_size:
             self.next_done = True
 
         self.next_done = True if self.current_step >= len(self.data) - 3 else False
@@ -116,8 +116,10 @@ class TradingEnv(gym.Env):
     def next_observation(self) -> np.ndarray:
         long_position_pnl_pct = self.position.pnl_pct if self.position.is_long else 0
         short_position_pnl_pct = self.position.pnl_pct if self.position.is_short else 0
+        available_equity = self.margin_available / self.equity
+        equity_pct = self.equity / self.initial_assets
         closed_stop_loss_pct = min([abs(self.closing_price - order.stop) / order.stop for order in self.orders]) if len(self.orders) else 0
-        account_obs = np.array([long_position_pnl_pct, short_position_pnl_pct])
+        account_obs = np.array([long_position_pnl_pct, short_position_pnl_pct, available_equity, equity_pct])
         if self.stop_loss:
             account_obs = np.append(account_obs, closed_stop_loss_pct)
 
