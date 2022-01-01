@@ -12,6 +12,7 @@ from ta.trend import sma_indicator, MACD, ADXIndicator, STCIndicator, ema_indica
 from ta.momentum import RSIIndicator, StochRSIIndicator
 from ta.volatility import BollingerBands, AverageTrueRange, average_true_range
 from ta.volume import money_flow_index, chaikin_money_flow
+from minepy import MINE
 
 
 class Preprocessor:
@@ -74,7 +75,7 @@ class Preprocessor:
             features[f"shadow_range_{period}"] = features["shadow_range"].rolling(period).mean()
             features[f"hl_range_{period}"] = high.rolling(period).max() - low.rolling(period).min()
 
-        # Trend Indicators
+        # # Trend Indicators
         # macd = MACD(data["Close"], window_slow=26, window_fast=12, window_sign=9)
         # adx = ADXIndicator(data["High"], low, data["Close"], window=14)
         # with warnings.catch_warnings():
@@ -90,14 +91,82 @@ class Preprocessor:
         # features["StochRSI"] = stoch_rsi.stochrsi_k() - stoch_rsi.stochrsi_d()
 
         # # Volume Indicator
-        # # features["MFI"] = money_flow_index(data["High"], low, data["Close"], volume, window=14)
-        # # features["CMF"] = chaikin_money_flow(data["High"], low, data["Close"], data["Volume"])
+        # features["MFI"] = money_flow_index(data["High"], low, data["Close"], volume, window=14)
+        # features["CMF"] = chaikin_money_flow(data["High"], low, data["Close"], data["Volume"])
 
         # # Volatility Indicator
+        # features["ATR"] = average_true_range(high, low, close, window=14)
         # bb = BollingerBands(data["Close"], window=20, window_dev=2)
         # features["BB %B"] = bb.bollinger_pband()
+        # data, features = self.align_date(data, features)
         data, features = self.align_date(data, features)
         return data, features.sort_index(axis=1)
+
+    @classmethod
+    def extract_features_v2(self, data: pd.DataFrame):
+        features = pd.DataFrame(index=data.index)
+
+        open, high, low, close, volume = data["Open"], data["High"], data["Low"], data["Close"], data["Volume"]
+        prev_close = close.shift(1)
+
+        features["log_return"] = close.apply(np.log1p).diff()
+        # features["rate_of_return"] = close.pct_change()
+        features["log_volume"] = volume.apply(np.log1p)
+        features["candle_value"] = ((close - open) / (high - low)).fillna(0)
+        features["true_range"] = pd.concat([np.abs(high - prev_close), np.abs(low - prev_close), high - low], axis=1).max(axis=1) / prev_close
+        features["gap_range"] = np.abs(open - prev_close) / prev_close
+        features["shadow_range"] = ((high - low) - np.abs(open - close)) / prev_close
+        features["real_body"] = abs(open - close) / prev_close
+        features = features.fillna(0)
+        aggregated_periods = [5, 10, 20, 50, 100, 200]
+
+        for period in aggregated_periods:
+            features[f"log_return_{period}"] = close.apply(np.log1p).diff(period)
+            features[f"log_volume_{period}"] = features["log_volume"].rolling(period).mean()
+            features[f"candle_value_{period}"] = features["candle_value"].rolling(period).mean()
+            features[f"gap_ma_{period}"] = (close - close.rolling(period).mean()) / close.rolling(period).mean()
+            features[f"volatility_{period}"] = features["log_return"].rolling(period).std()
+            features[f"true_range_{period}"] = features["true_range"].rolling(period).mean()
+            features[f"gap_range_{period}"] = features["gap_range"].rolling(period).mean()
+            features[f"shadow_range_{period}"] = features["shadow_range"].rolling(period).mean()
+            features[f"high_low_range_{period}"] = (
+                pd.concat([high.rolling(period).max() - close, close - low.rolling(period).min()], axis=1).min(axis=1) / close
+            )
+        data, features = self.align_date(data, features)
+        return data, features.sort_index(axis=1)
+
+    @classmethod
+    def select_feature(self, data: pd.DataFrame, _features: pd.DataFrame, corr_threshold=0.8):
+        features = _features.iloc[:-1, :]
+        y = data["Close"].pct_change().shift(-1).dropna()
+
+        assert len(features) == len(y)
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            mine = MINE()
+            mic = pd.Series(index=features.columns, dtype="float64")
+            for column in features.columns:
+                mine.compute_score(features[column].values, y.values)
+                mic[column] = mine.mic()
+
+        # p検定すれば、疑似相関を特定できるのでは？
+        corr: pd.DataFrame = _features.corr()
+        corr = corr.abs().unstack().sort_values(ascending=False)
+        corr = corr[corr > corr_threshold]
+        corr = corr[corr < 1]
+        corr = corr.reset_index()
+        corr.columns = ["feature_1", "feature_2", "corr"]
+        corr[~corr.duplicated("corr")]
+
+        drop_set = set()
+        for feature_1, feature_2, _ in corr.itertuples(index=False):
+            drop_feature = feature_2 if mic[feature_1] > mic[feature_2] else feature_1
+            drop_set.add(drop_feature)
+
+        features = _features.drop(list(drop_set), axis=1)
+        print(f"Delete features with high corr: {features.shape[1]} --> {features.shape[1] - len(drop_set)}")
+        return features
 
     @classmethod
     def time_train_test_split(
@@ -156,22 +225,31 @@ class Preprocessor:
             train_start = train_start + relativedelta(years=1)
 
     @classmethod
-    def create_cv_from_index(self, data, features, index, train_years, eval_years, train_start="2010-01-01"):
+    def create_cv_from_index(self, data: pd.DataFrame, features: pd.DataFrame, index, train_years, eval_years, train_start="2010-01-01"):
         train_start = datetime.strptime(train_start, "%Y-%m-%d") + relativedelta(years=index)
         train_end = train_start + relativedelta(years=train_years)
         eval_start = train_end
         eval_end = eval_start + relativedelta(years=eval_years)
+        test_start = eval_end
+        test_end = test_start + relativedelta(years=1)
 
         data_train = data.loc[train_start:train_end]
         data_eval = data.loc[eval_start:eval_end]
+        data_test = data.loc[test_start:test_end]
         features_train = features.loc[train_start:train_end]
         features_eval = features.loc[eval_start:eval_end]
+        features_test = features.loc[test_start:test_end]
 
         scaler = StandardScaler()
         features_train = pd.DataFrame(scaler.fit_transform(features_train), index=features_train.index, columns=features_train.columns)
         features_eval = pd.DataFrame(scaler.transform(features_eval), index=features_eval.index, columns=features_eval.columns)
+        features_test = pd.DataFrame(scaler.transform(features_test), index=features_test.index, columns=features_test.columns)
 
-        return data_train, features_train, data_eval, features_eval
+        assert len(data_train) == len(features_train)
+        assert len(data_eval) == len(features_eval)
+        assert len(data_test) == len(features_test)
+
+        return data_train, features_train, data_eval, features_eval, data_test, features_test
 
     @classmethod
     def train_test_split(
@@ -183,7 +261,7 @@ class Preprocessor:
     ):
         # assert (data.index == features.index).all(), f"{data.index}, {features.index}"
         data_train, data_eval = train_test_split(data, test_size=test_size, shuffle=False)
-        features_train, features_eval = train_test_split(data, test_size=test_size, shuffle=False)
+        features_train, features_eval = train_test_split(features, test_size=test_size, shuffle=False)
 
         if scaling:
             scaler = StandardScaler()

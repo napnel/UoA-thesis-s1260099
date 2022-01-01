@@ -19,7 +19,7 @@ class TradingEnv(gym.Env):
         self,
         data: pd.DataFrame,
         features: pd.DataFrame,
-        window_size: int = 5,
+        window_size: int = 30,
         fee: float = 0.001,
         reward_func: Callable = equity_log_return_reward,
         actions: IntEnum = LongNeutralShort,
@@ -27,7 +27,7 @@ class TradingEnv(gym.Env):
         debug: bool = False,
     ):
         """ """
-        assert len(data) == len(features)
+        assert len(data) == len(features), f"The data and features sizes are different: Data: {len(data)}, Features: {len(features)}"
         self.data = data.copy()
         self.features = features.copy()
         self.fee = fee
