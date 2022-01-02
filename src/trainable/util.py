@@ -78,7 +78,6 @@ def prepare_config_for_agent(_config: Dict[str, Any], logdir: str):
         data,
         features,
         index,
-        config["env_config"]["window_size"],
         cv_config["train_years"],
         cv_config["eval_years"],
         cv_config["train_start"],
