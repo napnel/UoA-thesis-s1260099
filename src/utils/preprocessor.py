@@ -233,12 +233,13 @@ class Preprocessor:
         test_start = eval_end
         test_end = test_start + relativedelta(years=1)
 
-        data_train = data.loc[train_start:train_end]
-        data_eval = data.loc[eval_start:eval_end]
-        data_test = data.loc[test_start:test_end]
-        features_train = features.loc[train_start:train_end]
-        features_eval = features.loc[eval_start:eval_end]
-        features_test = features.loc[test_start:test_end]
+        data_train = data.loc[train_start:train_end].copy()
+        data_eval = data.loc[eval_start:eval_end].copy()
+        data_test = data.loc[test_start:test_end].copy()
+        
+        features_train = features.loc[train_start:train_end].copy()
+        features_eval = features.loc[eval_start:eval_end].copy()
+        features_test = features.loc[test_start:test_end].copy()
 
         scaler = StandardScaler()
         features_train = pd.DataFrame(scaler.fit_transform(features_train), index=features_train.index, columns=features_train.columns)
