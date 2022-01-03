@@ -3,6 +3,7 @@ import glob
 import pandas as pd
 import yfinance as yf
 from typing import Optional
+from src.utils.preprocessor import Preprocessor
 
 
 class DataLoader:
@@ -36,11 +37,9 @@ class DataLoader:
         return data
 
     @classmethod
-    def prepare_data(self, ticker: str, data_path: str, features_file: str = None):
-        from src.utils.preprocessor import Preprocessor
+    def prepare_data(self, ticker: str, data_path: str):
 
         data_path = os.path.join(data_path, ticker)
-        # data_path = os.path.join(pathlib.Path(self.logdir).parent.parent, "data", ticker)
         if len(glob.glob(f"{data_path}/*.csv")) != 0:
             data = DataLoader.load_data(f"{data_path}/ohlcv.csv")
             features = DataLoader.load_data(f"{data_path}/features.csv")

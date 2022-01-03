@@ -50,6 +50,7 @@ print(args)
 
 assert args.num_samples > 1, "Can't tune them."
 
+
 def main(config):
     parameter_columns = ["__trial_index__"]
     tuning_params = get_tuning_params(args.algo)
@@ -61,7 +62,7 @@ def main(config):
         parameter_columns.append(param)
 
     searcher_alg = Repeater(HyperOptSearch(metric=METRIC, mode=MODE), repeat=args.repeat)
-    stopper = TrialPlateauStopper(metric="episode_reward_mean", std=0.01)
+    stopper = TrialPlateauStopper(metric="episode_reward_mean", std=0.015)
     reporter = CLIReporter(
         {
             "episode_reward_mean": "episode_reward",
