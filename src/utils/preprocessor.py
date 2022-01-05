@@ -8,9 +8,9 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler, PowerTransformer
 from sklearn.model_selection import train_test_split
 
-from ta.trend import sma_indicator, MACD, ADXIndicator, STCIndicator, ema_indicator
+from ta.trend import MACD, ADXIndicator
 from ta.momentum import RSIIndicator, StochRSIIndicator
-from ta.volatility import BollingerBands, AverageTrueRange, average_true_range
+from ta.volatility import BollingerBands, average_true_range
 from ta.volume import money_flow_index, chaikin_money_flow
 from minepy import MINE
 
@@ -75,30 +75,29 @@ class Preprocessor:
             features[f"shadow_range_{period}"] = features["shadow_range"].rolling(period).mean()
             features[f"hl_range_{period}"] = high.rolling(period).max() - low.rolling(period).min()
 
-        # # Trend Indicators
-        # macd = MACD(data["Close"], window_slow=26, window_fast=12, window_sign=9)
-        # adx = ADXIndicator(data["High"], low, data["Close"], window=14)
-        # with warnings.catch_warnings():
-        #     warnings.simplefilter("ignore", RuntimeWarning)
-        #     features["ADX"] = adx.adx()
+        # Trend Indicators
+        macd = MACD(data["Close"], window_slow=26, window_fast=12, window_sign=9)
+        adx = ADXIndicator(data["High"], low, data["Close"], window=14)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            features["ADX"] = adx.adx()
 
-        # features["MACD Hist"] = macd.macd_diff()
+        features["MACD Hist"] = macd.macd_diff()
 
-        # # Oscillator Indicator
-        # rsi = RSIIndicator(data["Close"], window=14).rsi()
-        # stoch_rsi = StochRSIIndicator(data["Close"])
-        # features["RSI"] = rsi
-        # features["StochRSI"] = stoch_rsi.stochrsi_k() - stoch_rsi.stochrsi_d()
+        # Oscillator Indicator
+        rsi = RSIIndicator(data["Close"], window=14).rsi()
+        stoch_rsi = StochRSIIndicator(data["Close"])
+        features["RSI"] = rsi
+        features["StochRSI"] = stoch_rsi.stochrsi_k() - stoch_rsi.stochrsi_d()
 
-        # # Volume Indicator
-        # features["MFI"] = money_flow_index(data["High"], low, data["Close"], volume, window=14)
-        # features["CMF"] = chaikin_money_flow(data["High"], low, data["Close"], data["Volume"])
+        # Volume Indicator
+        features["MFI"] = money_flow_index(data["High"], low, data["Close"], volume, window=14)
+        features["CMF"] = chaikin_money_flow(data["High"], low, data["Close"], data["Volume"])
 
-        # # Volatility Indicator
-        # features["ATR"] = average_true_range(high, low, close, window=14)
-        # bb = BollingerBands(data["Close"], window=20, window_dev=2)
-        # features["BB %B"] = bb.bollinger_pband()
-        # data, features = self.align_date(data, features)
+        # Volatility Indicator
+        features["ATR"] = average_true_range(high, low, close, window=14)
+        bb = BollingerBands(data["Close"], window=20, window_dev=2)
+        features["BB %B"] = bb.bollinger_pband()
         data, features = self.align_date(data, features)
         return data, features.sort_index(axis=1)
 

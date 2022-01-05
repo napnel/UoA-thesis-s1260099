@@ -20,7 +20,7 @@ ACTIONS = {
 }
 
 
-def get_agent_class(algo: str):
+def get_agent_class(algo: str, _config=None):
 
     if algo == "DQN":
         agent = dqn.DQNTrainer
@@ -45,6 +45,9 @@ def get_agent_class(algo: str):
     elif algo == "SAC":
         agent = sac.SACTrainer
         config = sac.DEFAULT_CONFIG.copy()
+        config["optimization"]["actor_learning_rate"] = _config["lr"]
+        config["optimization"]["critic_learning_rate"] = _config["lr"]
+        config["optimization"]["entropy_learning_rate"] = _config["lr"]
 
     elif algo == "DDPG":
         agent = ddpg.DDPGTrainer
@@ -92,6 +95,6 @@ def prepare_config_for_agent(_config: Dict[str, Any], logdir: str):
     config["_env_test_config"]["data"] = data_test
     config["_env_test_config"]["features"] = features_test
 
-    agent_class, algo_config = get_agent_class(algo)
+    agent_class, algo_config = get_agent_class(algo, config)
     algo_config.update(config)
     return agent_class, algo_config

@@ -1,12 +1,6 @@
 import os
 import random
-import requests
-import pathlib
-from typing import Any, Dict
-
 import numpy as np
-import pandas as pd
-from dotenv import load_dotenv
 
 
 def reduce_mem_usage(df):
@@ -57,20 +51,6 @@ def set_random_seed(seed=0):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
-
-
-def send_line_notification(message):
-    """
-    If you have line notify token and make .env file in utils folder, send message to LINE
-    """
-    load_dotenv(verbose=True)
-    dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
-    load_dotenv(dotenv_path)
-    line_notify_token = os.environ.get("LINE_NOTIFY_TOKEN")
-    endpoint = "https://notify-api.line.me/api/notify"
-    payload = {"message": f"\n{message}"}
-    headers = {"Authorization": f"Bearer {line_notify_token}"}
-    requests.post(endpoint, data=payload, headers=headers)
 
 
 def visualize_network(agent, device="cpu", policy_id="default_policy"):
