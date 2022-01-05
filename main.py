@@ -13,11 +13,14 @@ from ray.tune.trial import Trial
 from ray.tune.stopper import TrialPlateauStopper
 from ray.tune.suggest.repeater import Repeater
 from ray.tune.suggest.hyperopt import HyperOptSearch
+from ray.tune.schedulers.median_stopping_rule import MedianStoppingRule
 from ray.tune import CLIReporter
 from src.utils.tuning_space import get_tuning_params
 from src.trainable.cross_validation import ExperimentCV
 
 METRIC = "evaluation/episode_reward_mean"
+METRIC = "episode_reward_mean"
+NUM_WORKERS = "4"
 MODE = "max"
 
 
@@ -62,7 +65,12 @@ def main(config):
         parameter_columns.append(param)
 
     searcher_alg = Repeater(HyperOptSearch(metric=METRIC, mode=MODE), repeat=args.repeat)
-    stopper = TrialPlateauStopper(metric="episode_reward_mean", std=0.015)
+    stopper = TrialPlateauStopper(metric="episode_reward_mean", std=0.01, grace_period=10, num_results=10)
+    scheduler = MedianStoppingRule(
+        time_attr="training_iteration",
+        grace_period=10,
+        min_samples_required=10,
+    )
     reporter = CLIReporter(
         {
             "episode_reward_mean": "episode_reward",
@@ -82,6 +90,7 @@ def main(config):
     def trial_dirname_creator(trial: Trial):
         return f"{trial.trainable_name}-{trial.config['__trial_index__']}_{trial.trial_id}"
 
+
     analysis = tune.run(
         ExperimentCV,
         name=expt_name,
@@ -94,8 +103,9 @@ def main(config):
         checkpoint_at_end=True,
         local_dir=args.local_dir,
         trial_dirname_creator=trial_dirname_creator,
-        resources_per_trial=tune.PlacementGroupFactory([{"CPU": 4}, {"CPU": 4}]),
+        resources_per_trial=tune.PlacementGroupFactory([{"CPU": NUM_WORKERS}, {"CPU": NUM_WORKERS}]),
         search_alg=searcher_alg,
+        scheduler=scheduler,
         verbose=1,
     )
 
@@ -124,7 +134,7 @@ def main(config):
 
 if __name__ == "__main__":
     ray.shutdown()
-    ray.init(log_to_driver=False, num_gpus=0, local_mode=args.debug)
+    ray.init(num_gpus=0)
     config = {
         "env": "TradingEnv",
         "env_config": {
@@ -140,10 +150,9 @@ if __name__ == "__main__":
             "env_config": {},
             "explore": False,
         },
-        "num_workers": 4,
+        "num_workers": NUM_WORKERS,
         "framework": "torch",
-        # "log_level": "WARN",
-        "log_level": "DEBUG",
+        "log_level": "WARN" if not args.debug else "DEBUG",
         "timesteps_per_iteration": 5000,
         "num_gpus": 0,
         "seed": args.seed,
