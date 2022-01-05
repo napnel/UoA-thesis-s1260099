@@ -9,18 +9,18 @@ import pandas as pd
 
 import ray
 from ray import tune
+from ray.tune import schedulers
 from ray.tune.trial import Trial
 from ray.tune.stopper import TrialPlateauStopper
 from ray.tune.suggest.repeater import Repeater
 from ray.tune.suggest.hyperopt import HyperOptSearch
-from ray.tune.schedulers.median_stopping_rule import MedianStoppingRule
+from ray.tune.schedulers import ASHAScheduler
 from ray.tune import CLIReporter
 from src.utils.tuning_space import get_tuning_params
 from src.trainable.cross_validation import ExperimentCV
 
 METRIC = "evaluation/episode_reward_mean"
-METRIC = "episode_reward_mean"
-NUM_WORKERS = "4"
+NUM_WORKERS = 6
 MODE = "max"
 
 
@@ -66,11 +66,7 @@ def main(config):
 
     searcher_alg = Repeater(HyperOptSearch(metric=METRIC, mode=MODE), repeat=args.repeat)
     stopper = TrialPlateauStopper(metric="episode_reward_mean", std=0.01, grace_period=10, num_results=10)
-    scheduler = MedianStoppingRule(
-        time_attr="training_iteration",
-        grace_period=10,
-        min_samples_required=10,
-    )
+    scheduler = ASHAScheduler(time_attr="training_iteration")
     reporter = CLIReporter(
         {
             "episode_reward_mean": "episode_reward",
@@ -79,6 +75,7 @@ def main(config):
             "episodes_total": "episodes",
         },
         parameter_columns=parameter_columns,
+        max_progress_rows=30,
         max_report_frequency=30,
     )
 
