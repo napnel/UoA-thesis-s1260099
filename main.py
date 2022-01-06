@@ -14,7 +14,6 @@ from ray.tune.trial import Trial
 from ray.tune.stopper import TrialPlateauStopper
 from ray.tune.suggest.repeater import Repeater
 from ray.tune.suggest.hyperopt import HyperOptSearch
-from ray.tune.schedulers import ASHAScheduler
 from ray.tune import CLIReporter
 from src.utils.tuning_space import get_tuning_params
 from src.trainable.cross_validation import ExperimentCV
@@ -66,7 +65,6 @@ def main(config):
 
     searcher_alg = Repeater(HyperOptSearch(metric=METRIC, mode=MODE), repeat=args.repeat)
     stopper = TrialPlateauStopper(metric="episode_reward_mean", std=0.01, grace_period=10, num_results=10)
-    scheduler = ASHAScheduler(time_attr="training_iteration")
     reporter = CLIReporter(
         {
             "episode_reward_mean": "episode_reward",
@@ -102,7 +100,6 @@ def main(config):
         trial_dirname_creator=trial_dirname_creator,
         resources_per_trial=tune.PlacementGroupFactory([{"CPU": NUM_WORKERS}, {"CPU": NUM_WORKERS}]),
         search_alg=searcher_alg,
-        scheduler=scheduler,
         verbose=1,
     )
 
