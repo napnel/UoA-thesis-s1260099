@@ -10,15 +10,16 @@ import pandas as pd
 import ray
 from ray import tune
 from ray.tune.trial import Trial
-from ray.tune.stopper import TrialPlateauStopper
+from ray.tune.stopper import MaximumIterationStopper
 from ray.tune.suggest.repeater import Repeater
 from ray.tune.suggest.hyperopt import HyperOptSearch
 from ray.tune import CLIReporter
 from src.utils.tuning_space import get_tuning_params
 from src.trainable.cross_validation import ExperimentCV
+from src.utils.data_loader import DataLoader
 
 METRIC = "evaluation/episode_reward_mean"
-NUM_WORKERS = 6
+NUM_WORKERS = 2
 MODE = "max"
 
 
@@ -26,9 +27,9 @@ parser = argparse.ArgumentParser()
 # Basic Settings
 parser.add_argument("--ticker", type=str, default="^N225")
 parser.add_argument("--algo", type=str, default="DQN")
+parser.add_argument("--max_iter", type=int, default=10)
 
 # Environment Settings (Optional)
-parser.add_argument("--features", type=str, default=None)
 parser.add_argument("--window_size", type=int, default=None)
 parser.add_argument("--fee", type=float, default=None)
 parser.add_argument("--reward_func", type=str, default=None)
@@ -52,7 +53,40 @@ print(args)
 assert args.num_samples > 1, "Can't tune them."
 
 
-def main(config):
+def main():
+    data, features = DataLoader.prepare_data(args.ticker, pathlib.Path())
+    config = {
+        "env": "TradingEnv",
+        "env_config": {
+            "window_size": args.window_size,
+            "fee": args.fee,
+            "actions": args.actions,
+            "reward_func": args.reward_func,
+            "stop_loss": args.stop_loss,
+        },
+        "evaluation_interval": 1,
+        "evaluation_num_episodes": 1,
+        "evaluation_config": {
+            "env_config": {},
+            "explore": False,
+        },
+        "num_workers": NUM_WORKERS,
+        "framework": "torch",
+        "log_level": "WARN" if not args.debug else "DEBUG",
+        "timesteps_per_iteration": 5000,
+        "num_gpus": 0,
+        "seed": args.seed,
+        "_algo": args.algo,
+        "_data": data,
+        "_features": features,
+        "_cv_config": {
+            "train_start": "2010-01-01",
+            "train_years": args.train_years,
+            "eval_years": args.eval_years,
+        },
+        "_env_test_config": {},
+    }
+
     parameter_columns = ["__trial_index__"]
     tuning_params = get_tuning_params(args.algo)
     for param, bounds in tuning_params.items():
@@ -63,7 +97,8 @@ def main(config):
         parameter_columns.append(param)
 
     searcher_alg = Repeater(HyperOptSearch(metric=METRIC, mode=MODE), repeat=args.repeat)
-    stopper = TrialPlateauStopper(metric="episode_reward_mean", std=0.01, grace_period=5, num_results=5)
+    stopper = MaximumIterationStopper(max_iter=args.max_iter)
+
     reporter = CLIReporter(
         {
             "episode_reward_mean": "episode_reward",
@@ -97,7 +132,7 @@ def main(config):
         checkpoint_at_end=True,
         local_dir=args.local_dir,
         trial_dirname_creator=trial_dirname_creator,
-        resources_per_trial=tune.PlacementGroupFactory([{"CPU": NUM_WORKERS}, {"CPU": NUM_WORKERS}]),
+        resources_per_trial=tune.PlacementGroupFactory([{}, {"CPU": NUM_WORKERS}]),
         search_alg=searcher_alg,
         verbose=1,
     )
@@ -128,36 +163,5 @@ def main(config):
 if __name__ == "__main__":
     ray.shutdown()
     ray.init(num_gpus=0)
-    config = {
-        "env": "TradingEnv",
-        "env_config": {
-            "window_size": args.window_size,
-            "fee": args.fee,
-            "actions": args.actions,
-            "reward_func": args.reward_func,
-            "stop_loss": args.stop_loss,
-        },
-        "evaluation_interval": 1,
-        "evaluation_num_episodes": 1,
-        "evaluation_config": {
-            "env_config": {},
-            "explore": False,
-        },
-        "num_workers": NUM_WORKERS,
-        "framework": "torch",
-        "log_level": "WARN" if not args.debug else "DEBUG",
-        "timesteps_per_iteration": 5000,
-        "num_gpus": 0,
-        "seed": args.seed,
-        "_algo": args.algo,
-        "_ticker": args.ticker,
-        "_cv_config": {
-            "train_start": "2010-01-01",
-            "train_years": args.train_years,
-            "eval_years": args.eval_years,
-        },
-        "_env_test_config": {},
-    }
-
-    main(config)
+    main()
     ray.shutdown()

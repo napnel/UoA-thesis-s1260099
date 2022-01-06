@@ -62,7 +62,8 @@ def get_agent_class(algo: str, _config=None):
 def prepare_config_for_agent(_config: Dict[str, Any], logdir: str):
     config = _config.copy()
     algo = config.pop("_algo")
-    ticker = config.pop("_ticker")
+    data = config.pop("_data")
+    features = config.pop("_features")
     cv_config = config.pop("_cv_config")
     index = config.pop("__trial_index__")
 
@@ -76,7 +77,6 @@ def prepare_config_for_agent(_config: Dict[str, Any], logdir: str):
     config["_env_test_config"] = config["env_config"].copy()
 
     # Divide the data according to the index
-    data, features = DataLoader.prepare_data(ticker, pathlib.Path(logdir).parent)
     data_train, features_train, data_eval, features_eval, data_test, features_test = Preprocessor.create_cv_from_index(
         data,
         features,
