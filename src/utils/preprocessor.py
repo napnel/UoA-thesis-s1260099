@@ -5,7 +5,7 @@ from typing import Tuple
 
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler, PowerTransformer
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
 from ta.trend import MACD, ADXIndicator
@@ -120,7 +120,6 @@ class Preprocessor:
         aggregated_periods = [5, 20, 50, 100, 200]
 
         for period in aggregated_periods:
-            features[f"log_volume_{period}"] = features["log_volume"].rolling(period).mean()
             features[f"candle_value_{period}"] = features["candle_value"].rolling(period).mean()
             features[f"gap_ma_{period}"] = (close - close.rolling(period).mean()) / close.rolling(period).mean()
             features[f"true_range_{period}"] = features["true_range"].rolling(period).mean()

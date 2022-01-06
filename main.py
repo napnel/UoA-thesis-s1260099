@@ -16,7 +16,6 @@ from ray.tune.suggest.hyperopt import HyperOptSearch
 from ray.tune import CLIReporter
 from src.utils.tuning_space import get_tuning_params
 from src.trainable.cross_validation import ExperimentCV
-from src.utils.data_loader import DataLoader
 
 METRIC = "evaluation/episode_reward_mean"
 NUM_WORKERS = 2
@@ -53,40 +52,7 @@ print(args)
 assert args.num_samples > 1, "Can't tune them."
 
 
-def main():
-    data, features = DataLoader.prepare_data(args.ticker, pathlib.Path())
-    config = {
-        "env": "TradingEnv",
-        "env_config": {
-            "window_size": args.window_size,
-            "fee": args.fee,
-            "actions": args.actions,
-            "reward_func": args.reward_func,
-            "stop_loss": args.stop_loss,
-        },
-        "evaluation_interval": 1,
-        "evaluation_num_episodes": 1,
-        "evaluation_config": {
-            "env_config": {},
-            "explore": False,
-        },
-        "num_workers": NUM_WORKERS,
-        "framework": "torch",
-        "log_level": "WARN" if not args.debug else "DEBUG",
-        "timesteps_per_iteration": 5000,
-        "num_gpus": 0,
-        "seed": args.seed,
-        "_algo": args.algo,
-        "_data": data,
-        "_features": features,
-        "_cv_config": {
-            "train_start": "2010-01-01",
-            "train_years": args.train_years,
-            "eval_years": args.eval_years,
-        },
-        "_env_test_config": {},
-    }
-
+def main(config):
     parameter_columns = ["__trial_index__"]
     tuning_params = get_tuning_params(args.algo)
     for param, bounds in tuning_params.items():
@@ -163,5 +129,35 @@ def main():
 if __name__ == "__main__":
     ray.shutdown()
     ray.init(num_gpus=0)
-    main()
+    config = {
+        "env": "TradingEnv",
+        "env_config": {
+            "window_size": args.window_size,
+            "fee": args.fee,
+            "actions": args.actions,
+            "reward_func": args.reward_func,
+            "stop_loss": args.stop_loss,
+        },
+        "evaluation_interval": 1,
+        "evaluation_num_episodes": 1,
+        "evaluation_config": {
+            "env_config": {},
+            "explore": False,
+        },
+        "num_workers": NUM_WORKERS,
+        "framework": "torch",
+        "log_level": "WARN" if not args.debug else "DEBUG",
+        "timesteps_per_iteration": 5000,
+        "num_gpus": 0,
+        "seed": args.seed,
+        "_algo": args.algo,
+        "_ticker": args.ticker,
+        "_cv_config": {
+            "train_start": "2010-01-01",
+            "train_years": args.train_years,
+            "eval_years": args.eval_years,
+        },
+        "_env_test_config": {},
+    }
+    main(config)
     ray.shutdown()

@@ -1,11 +1,6 @@
-from ctypes import Union
-from enum import IntEnum
 import pathlib
-from typing import Callable, Dict, Any
-
-from ray import tune
+from typing import Dict, Any
 from ray.rllib.agents import dqn, a3c, ppo, sac, ddpg
-from sklearn import feature_selection
 from src.utils import DataLoader, Preprocessor
 from src.envs.actions import BuySell, LongNeutralShort
 from src.envs.reward_func import equity_log_return_reward, initial_equity_return_reward
@@ -20,7 +15,7 @@ ACTIONS = {
 }
 
 
-def get_agent_class(algo: str, _config=None):
+def get_agent_class(algo: str, _config: Dict[str, Any] = None):
 
     if algo == "DQN":
         agent = dqn.DQNTrainer
@@ -62,8 +57,7 @@ def get_agent_class(algo: str, _config=None):
 def prepare_config_for_agent(_config: Dict[str, Any], logdir: str):
     config = _config.copy()
     algo = config.pop("_algo")
-    data = config.pop("_data")
-    features = config.pop("_features")
+    ticker = config.pop("_ticker")
     cv_config = config.pop("_cv_config")
     index = config.pop("__trial_index__")
 
@@ -77,6 +71,7 @@ def prepare_config_for_agent(_config: Dict[str, Any], logdir: str):
     config["_env_test_config"] = config["env_config"].copy()
 
     # Divide the data according to the index
+    data, features = DataLoader.prepare_data(ticker, pathlib.Path(logdir).parent.parent)
     data_train, features_train, data_eval, features_eval, data_test, features_test = Preprocessor.create_cv_from_index(
         data,
         features,
