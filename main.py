@@ -9,7 +9,6 @@ import pandas as pd
 
 import ray
 from ray import tune
-from ray.tune import schedulers
 from ray.tune.trial import Trial
 from ray.tune.stopper import TrialPlateauStopper
 from ray.tune.suggest.repeater import Repeater
@@ -64,7 +63,7 @@ def main(config):
         parameter_columns.append(param)
 
     searcher_alg = Repeater(HyperOptSearch(metric=METRIC, mode=MODE), repeat=args.repeat)
-    stopper = TrialPlateauStopper(metric="episode_reward_mean", std=0.01, grace_period=10, num_results=10)
+    stopper = TrialPlateauStopper(metric="episode_reward_mean", std=0.01, grace_period=5, num_results=5)
     reporter = CLIReporter(
         {
             "episode_reward_mean": "episode_reward",

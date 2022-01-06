@@ -19,7 +19,7 @@ class TradingEnv(gym.Env):
         self,
         data: pd.DataFrame,
         features: pd.DataFrame,
-        window_size: int = 30,
+        window_size: int = 25,
         fee: float = 0.001,
         reward_func: Callable = equity_log_return_reward,
         actions: IntEnum = LongNeutralShort,
@@ -40,7 +40,7 @@ class TradingEnv(gym.Env):
         self.current_step = 0
         self.initial_assets = 100000
         self.assets = self.initial_assets
-        self.trade_size = self.assets // self.data["High"].max()
+        self.trade_size = self.assets * 0.75 // self.data["High"].max()
         self.position: Optional[Position] = Position(self)
         self.orders: List[Order] = []
         self.trades: List[Trade] = []

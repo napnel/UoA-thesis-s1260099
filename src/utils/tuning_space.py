@@ -4,7 +4,7 @@ from ray import tune
 
 def get_tuning_params(algo: str):
     tuning_params = {
-        "lr": tune.uniform(5e-6, 5e-5),
+        "lr": tune.uniform(5e-5, 5e-3),
         "gamma": tune.uniform(0.5, 0.99),
     }
 

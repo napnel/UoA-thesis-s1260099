@@ -117,17 +117,13 @@ class Preprocessor:
         features["shadow_range"] = ((high - low) - np.abs(open - close)) / prev_close
         features["real_body"] = abs(open - close) / prev_close
         features = features.fillna(0)
-        aggregated_periods = [5, 10, 20, 50, 100, 200]
+        aggregated_periods = [5, 20, 50, 100, 200]
 
         for period in aggregated_periods:
-            features[f"log_return_{period}"] = close.apply(np.log1p).diff(period)
             features[f"log_volume_{period}"] = features["log_volume"].rolling(period).mean()
             features[f"candle_value_{period}"] = features["candle_value"].rolling(period).mean()
             features[f"gap_ma_{period}"] = (close - close.rolling(period).mean()) / close.rolling(period).mean()
-            features[f"volatility_{period}"] = features["log_return"].rolling(period).std()
             features[f"true_range_{period}"] = features["true_range"].rolling(period).mean()
-            features[f"gap_range_{period}"] = features["gap_range"].rolling(period).mean()
-            features[f"shadow_range_{period}"] = features["shadow_range"].rolling(period).mean()
             features[f"high_low_range_{period}"] = (
                 pd.concat([high.rolling(period).max() - close, close - low.rolling(period).min()], axis=1).min(axis=1) / close
             )
@@ -162,9 +158,10 @@ class Preprocessor:
         for feature_1, feature_2, _ in corr.itertuples(index=False):
             drop_feature = feature_2 if mic[feature_1] > mic[feature_2] else feature_1
             drop_set.add(drop_feature)
+            print(f"The corr is high {feature_1} and {feature_2}, drop {drop_feature}")
 
         features = _features.drop(list(drop_set), axis=1)
-        print(f"Delete features with high corr: {features.shape[1]} --> {features.shape[1] - len(drop_set)}")
+        print(f"Delete features with high corr: {_features.shape[1]} --> {_features.shape[1] - len(drop_set)}")
         return features
 
     @classmethod
