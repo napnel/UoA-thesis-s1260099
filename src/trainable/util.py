@@ -15,7 +15,7 @@ ACTIONS = {
 }
 
 
-def get_agent_class(algo: str, _config: Dict[str, Any] = None):
+def get_agent_class(algo: str, _config: Dict[str, Any]):
 
     if algo == "DQN":
         agent = dqn.DQNTrainer
@@ -43,6 +43,19 @@ def get_agent_class(algo: str, _config: Dict[str, Any] = None):
         config["optimization"]["actor_learning_rate"] = _config["lr"]
         config["optimization"]["critic_learning_rate"] = _config["lr"]
         config["optimization"]["entropy_learning_rate"] = _config["lr"]
+        config["rollout_fragment_length"] = 4
+        config["target_network_update_freq"] = 256
+        config["tau"] = 1e-3
+        config["train_batch_size"] = 128
+        config["Q_model"] = {
+            "custom_model": _config["model"]["custom_model"],
+            "fcnet_hiddens": _config["model"]["fcnet_hiddens"],
+        }
+        config["policy_model"] = {
+            "custom_model": _config["model"]["custom_model"],
+            "fcnet_hiddens": _config["model"]["fcnet_hiddens"],
+        }
+        _config.pop("model")
 
     elif algo == "DDPG":
         agent = ddpg.DDPGTrainer

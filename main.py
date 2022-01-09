@@ -14,12 +14,12 @@ from ray.tune.stopper import MaximumIterationStopper
 from ray.tune.suggest.repeater import Repeater
 from ray.tune.suggest.hyperopt import HyperOptSearch
 from ray.tune import CLIReporter
+from ray.rllib.models import ModelCatalog
+from src.models.batch_norm import BatchNormModel
 from src.utils.tuning_space import get_tuning_params
 from src.trainable.cross_validation import ExperimentCV
+from src.evaluation.util import backtest_expt, plot_all_progress_cv
 
-METRIC = "evaluation/episode_reward_mean"
-NUM_WORKERS = 2
-MODE = "max"
 
 
 parser = argparse.ArgumentParser()
@@ -39,10 +39,11 @@ parser.add_argument("--stop_loss", action="store_true")
 parser.add_argument("--repeat", type=int, default=5)
 parser.add_argument("--train_years", type=int, default=5)
 parser.add_argument("--eval_years", type=int, default=2)
+parser.add_argument("--num_samples", type=int, default=30)
 
 # Other Settings
 parser.add_argument("--seed", type=int, default=3407)
-parser.add_argument("--num_samples", type=int, default=30)
+parser.add_argument("--num_workers", type=int, default=2)
 parser.add_argument("--local_dir", type=str, default="./ray_results")
 parser.add_argument("--expt_name", type=str, default=None)
 parser.add_argument("--debug", action="store_true")
@@ -50,6 +51,9 @@ args = parser.parse_args()
 print(args)
 
 assert args.num_samples > 1, "Can't tune them."
+
+METRIC = "evaluation/episode_reward_mean"
+MODE = "max"
 
 
 def main(config):
@@ -98,7 +102,7 @@ def main(config):
         checkpoint_at_end=True,
         local_dir=args.local_dir,
         trial_dirname_creator=trial_dirname_creator,
-        resources_per_trial=tune.PlacementGroupFactory([{}, {"CPU": NUM_WORKERS}]),
+        resources_per_trial=tune.PlacementGroupFactory([{}, {"CPU": args.num_workers}]),
         search_alg=searcher_alg,
         verbose=1,
     )
@@ -108,25 +112,12 @@ def main(config):
 
     print(f"This experiment is saved at {pathlib.Path(analysis.best_logdir).parent}")
 
-    all_configs = analysis.get_all_configs()
-    expt_df = pd.DataFrame()
-    # parameter_columns = ["config/" + param for param in tuned_params]
-    for logdir, df in analysis.trial_dataframes.items():
-        config = all_configs[logdir].copy()
-        for k, v in config["env_config"].items():
-            config[f"env_config/{k}"] = v
-        config.pop("env_config")
-
-        tuned_params = get_tuning_params(config["_algo"])
-        tuned_config = pd.DataFrame({k: v for k, v in config.items() if k in tuned_params}, index=[0])
-        df = pd.concat([df, tuned_config], axis=1).fillna(method="ffill")
-        expt_df = pd.concat([expt_df, df], axis=0)
-
-    cv_score = expt_df.groupby(by=list(tuned_params.keys()) + ["timesteps_total"]).mean()
-    print(cv_score.filter(regex="reward_mean"))
+    plot_all_progress_cv(analysis)
+    backtest_expt(analysis)
 
 
 if __name__ == "__main__":
+    ModelCatalog.register_custom_model("batch_norm_model", BatchNormModel)
     ray.shutdown()
     ray.init(num_gpus=0)
     config = {
@@ -138,13 +129,18 @@ if __name__ == "__main__":
             "reward_func": args.reward_func,
             "stop_loss": args.stop_loss,
         },
+        "model": {
+            "fcnet_hiddens": [256, 128],
+            "fcnet_activation": "relu",
+            "custom_model": "batch_norm_model",
+        },
         "evaluation_interval": 1,
         "evaluation_num_episodes": 1,
         "evaluation_config": {
             "env_config": {},
             "explore": False,
         },
-        "num_workers": NUM_WORKERS,
+        "num_workers": args.num_workers,
         "framework": "torch",
         "log_level": "WARN" if not args.debug else "DEBUG",
         "timesteps_per_iteration": 5000,
