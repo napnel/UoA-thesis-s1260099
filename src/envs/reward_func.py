@@ -1,8 +1,6 @@
-from math import copysign
-from empyrical import sharpe_ratio
 import numpy as np
 import pandas as pd
-
+from empyrical import sharpe_ratio
 from src.envs.core.dummy_environment import TradingEnv
 
 

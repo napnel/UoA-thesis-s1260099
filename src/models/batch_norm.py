@@ -1,19 +1,14 @@
-import numpy as np
+from typing import Callable
+
 import gym
-import torch
+import numpy as np
 import torch.nn as nn
-from typing import Union, Tuple, Any, List
-
-from ray.rllib.models.modelv2 import ModelV2
+from ray.rllib.models.torch.misc import normc_initializer
 from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
-from ray.rllib.models.torch.misc import normc_initializer, same_padding
-from ray.rllib.utils.annotations import override
-from ray.rllib.utils.typing import Dict, TensorType, List, ModelConfigDict, Any
 from ray.rllib.models.utils import get_activation_fn
-from ray.rllib.utils.annotations import override
-from ray.rllib.utils.typing import ModelConfigDict, TensorType
 from ray.rllib.policy.sample_batch import SampleBatch
-
+from ray.rllib.utils.annotations import override
+from ray.rllib.utils.typing import Dict, List, ModelConfigDict, TensorType
 
 
 class SimpleFC(nn.Module):
@@ -23,23 +18,13 @@ class SimpleFC(nn.Module):
         self,
         in_size: int,
         out_size: int,
-        initializer: Any = None,
-        activation_fn: Any = None,
+        initializer: Callable = None,
+        activation_fn: Callable = None,
         use_bias: bool = True,
         bias_init: float = 0.0,
         use_batch_norm: bool = False,
         use_dropout: bool = False,
     ):
-        """Creates a standard FC layer, similar to torch.nn.Linear
-
-        Args:
-            in_size(int): Input size for FC Layer
-            out_size (int): Output size for FC Layer
-            initializer (Any): Initializer function for FC layer weights
-            activation_fn (Any): Activation function at the end of layer
-            use_bias (bool): Whether to add bias weights or not
-            bias_init (float): Initalize bias weights to bias_init const
-        """
         super(SimpleFC, self).__init__()
         layers = []
         # Actual nn.Linear layer (including correct initialization logic).
@@ -81,9 +66,13 @@ class BatchNormModel(TorchModelV2, nn.Module):
         use_dropout: bool = True,
         **kwargs,
     ):
-        TorchModelV2.__init__(self, obs_space, action_space, num_outputs, model_config, name)
+        TorchModelV2.__init__(
+            self, obs_space, action_space, num_outputs, model_config, name
+        )
         nn.Module.__init__(self)
-        hiddens = list(model_config.get("fcnet_hiddens", [])) + list(model_config.get("post_fcnet_hiddens", []))
+        hiddens = list(model_config.get("fcnet_hiddens", [])) + list(
+            model_config.get("post_fcnet_hiddens", [])
+        )
         activation = model_config.get("fcnet_activation")
         if not model_config.get("fcnet_hiddens", []):
             activation = model_config.get("post_fcnet_activation")
@@ -148,7 +137,12 @@ class BatchNormModel(TorchModelV2, nn.Module):
         self._last_flat_in = None
 
     @override(TorchModelV2)
-    def forward(self, input_dict: Dict[str, TensorType], state: List[TensorType], seq_lens: TensorType):
+    def forward(
+        self,
+        input_dict: Dict[str, TensorType],
+        state: List[TensorType],
+        seq_lens: TensorType,
+    ):
         if isinstance(input_dict, SampleBatch):
             is_training = bool(input_dict.is_training)
         else:
@@ -168,6 +162,8 @@ class BatchNormModel(TorchModelV2, nn.Module):
     def value_function(self) -> TensorType:
         assert self._features is not None, "must call forward() first"
         if self._value_branch_separate:
-            return self._value_branch(self._value_branch_separate(self._last_flat_in)).squeeze(1)
+            return self._value_branch(
+                self._value_branch_separate(self._last_flat_in)
+            ).squeeze(1)
         else:
             return self._value_branch(self._features).squeeze(1)

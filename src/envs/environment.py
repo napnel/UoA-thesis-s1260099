@@ -1,16 +1,15 @@
+import sys
+import warnings
+from enum import IntEnum
+from math import copysign
+from typing import Callable, List, Optional
+
 import gym
-from gym import spaces
 import numpy as np
 import pandas as pd
-import sys
-from math import copysign
-from enum import IntEnum
-from copy import copy
-import warnings
-from typing import Optional, Dict, Callable, List, Union
-
-from src.envs.core import Position, Trade, Order
-from src.envs.actions import BuySell, BuyHoldSell, LonglShort, LongNeutralShort
+from gym import spaces
+from src.envs.actions import LongNeutralShort
+from src.envs.core import Order, Position, Trade
 from src.envs.reward_func import equity_log_return_reward
 
 
@@ -27,7 +26,9 @@ class TradingEnv(gym.Env):
         debug: bool = False,
     ):
         """ """
-        assert len(data) == len(features), f"The data and features sizes are different: Data: {len(data)}, Features: {len(features)}"
+        assert len(data) == len(
+            features
+        ), f"The data and features sizes are different: Data: {len(data)}, Features: {len(features)}"
         self.data = data.copy()
         self.features = features.copy()
         self.fee = fee
@@ -45,10 +46,19 @@ class TradingEnv(gym.Env):
         self.orders: List[Order] = []
         self.trades: List[Trade] = []
         self.closed_trades: List[Trade] = []
-        self.observation_size = len(self.features.columns) + 3 if not self.stop_loss else len(self.features.columns) + 4
+        self.observation_size = (
+            len(self.features.columns) + 3
+            if not self.stop_loss
+            else len(self.features.columns) + 4
+        )
 
         self.action_space = spaces.Discrete(len(actions))
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.window_size, self.observation_size), dtype=np.float32)
+        self.observation_space = spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(self.window_size, self.observation_size),
+            dtype=np.float32,
+        )
 
         self._leverage = 1
         self._hedging = False
@@ -68,7 +78,11 @@ class TradingEnv(gym.Env):
         self.closed_trades = []
 
         features_obs = self.features.iloc[: self.window_size, :].values
-        account_obs = np.tile([0, 0, 1], (self.window_size, 1)) if not self.stop_loss else np.tile([0, 0, 1, 0], (self.window_size, 1))
+        account_obs = (
+            np.tile([0, 0, 1], (self.window_size, 1))
+            if not self.stop_loss
+            else np.tile([0, 0, 1, 0], (self.window_size, 1))
+        )
         self.observation = np.hstack((features_obs, account_obs))
         return self.observation
 
@@ -117,12 +131,25 @@ class TradingEnv(gym.Env):
         long_position_pnl_pct = self.position.pnl_pct if self.position.is_long else 0
         short_position_pnl_pct = self.position.pnl_pct if self.position.is_short else 0
         available_equity = self.margin_available / self.equity
-        closed_stop_loss_pct = min([abs(self.closing_price - order.stop) / order.stop for order in self.orders]) if len(self.orders) else 0
-        account_obs = np.array([long_position_pnl_pct, short_position_pnl_pct, available_equity])
+        closed_stop_loss_pct = (
+            min(
+                [
+                    abs(self.closing_price - order.stop) / order.stop
+                    for order in self.orders
+                ]
+            )
+            if len(self.orders)
+            else 0
+        )
+        account_obs = np.array(
+            [long_position_pnl_pct, short_position_pnl_pct, available_equity]
+        )
         if self.stop_loss:
             account_obs = np.append(account_obs, closed_stop_loss_pct)
 
-        next_single_obs = np.hstack((self.features.iloc[self.current_step - 1, :], account_obs))
+        next_single_obs = np.hstack(
+            (self.features.iloc[self.current_step - 1, :], account_obs)
+        )
         next_observation = np.vstack((self.observation[1:], next_single_obs))
         return next_observation
 
@@ -149,11 +176,15 @@ class TradingEnv(gym.Env):
 
     @property
     def latest_high_price(self):
-        return self.data["High"][self.current_step - self.window_size : self.current_step + 1].max()
+        return self.data["High"][
+            self.current_step - self.window_size : self.current_step + 1
+        ].max()
 
     @property
     def latest_low_price(self):
-        return self.data["Low"][self.current_step - self.window_size : self.current_step + 1].min()
+        return self.data["Low"][
+            self.current_step - self.window_size : self.current_step + 1
+        ].min()
 
     class __FULL_EQUITY(float):
         def __repr__(self):
@@ -183,7 +214,16 @@ class TradingEnv(gym.Env):
         assert 0 < size < 1 or round(size) == size
         return self.new_order(-size, limit_price, stop_price, sl, tp)
 
-    def new_order(self, size: float, limit: float = None, stop: float = None, sl: float = None, tp: float = None, *, trade: Trade = None):
+    def new_order(
+        self,
+        size: float,
+        limit: float = None,
+        stop: float = None,
+        sl: float = None,
+        tp: float = None,
+        *,
+        trade: Trade = None,
+    ):
         size = float(size)
         stop = stop and float(stop)
         limit = limit and float(limit)
@@ -195,10 +235,16 @@ class TradingEnv(gym.Env):
 
         if is_long:
             if not (sl or -np.inf) < (limit or stop or adjusted_price) < (tp or np.inf):
-                raise ValueError("Long orders require: " f"SL ({sl}) < LIMIT ({limit or stop or adjusted_price}) < TP ({tp})")
+                raise ValueError(
+                    "Long orders require: "
+                    f"SL ({sl}) < LIMIT ({limit or stop or adjusted_price}) < TP ({tp})"
+                )
         else:
             if not (tp or -np.inf) < (limit or stop or adjusted_price) < (sl or np.inf):
-                raise ValueError("Short orders require: " f"TP ({tp}) < LIMIT ({limit or stop or adjusted_price}) < SL ({sl})")
+                raise ValueError(
+                    "Short orders require: "
+                    f"TP ({tp}) < LIMIT ({limit or stop or adjusted_price}) < SL ({sl})"
+                )
 
         order = Order(self, size, limit, stop, sl, tp, trade)
         if trade:
@@ -213,7 +259,11 @@ class TradingEnv(gym.Env):
 
     def _process_orders(self):
         data = self.data
-        open, high, low = data.Open[self.current_step], data.High[self.current_step], data.Low[self.current_step]
+        open, high, low = (
+            data.Open[self.current_step],
+            data.High[self.current_step],
+            data.Low[self.current_step],
+        )
         prev_close = data.Close[self.current_step - 1]
         reprocess_orders = False
 
@@ -227,7 +277,9 @@ class TradingEnv(gym.Env):
             # Check if stop condition was hit
             stop_price = order.stop
             if stop_price:
-                is_stop_hit = (high > stop_price) if order.is_long else (low < stop_price)
+                is_stop_hit = (
+                    (high > stop_price) if order.is_long else (low < stop_price)
+                )
                 if not is_stop_hit:
                     continue
 
@@ -238,25 +290,39 @@ class TradingEnv(gym.Env):
             # Determine purchase price.
             # Check if limit order can be filled.
             if order.limit:
-                is_limit_hit = low < order.limit if order.is_long else high > order.limit
+                is_limit_hit = (
+                    low < order.limit if order.is_long else high > order.limit
+                )
                 # When stop and limit are hit within the same bar, we pessimistically
                 # assume limit was hit before the stop (i.e. "before it counts")
                 is_limit_hit_before_stop = is_limit_hit and (
-                    order.limit < (stop_price or -np.inf) if order.is_long else order.limit > (stop_price or np.inf)
+                    order.limit < (stop_price or -np.inf)
+                    if order.is_long
+                    else order.limit > (stop_price or np.inf)
                 )
                 if not is_limit_hit or is_limit_hit_before_stop:
                     continue
 
                 # stop_price, if set, was hit within this bar
-                price = min(stop_price or open, order.limit) if order.is_long else max(stop_price or open, order.limit)
+                price = (
+                    min(stop_price or open, order.limit)
+                    if order.is_long
+                    else max(stop_price or open, order.limit)
+                )
             else:
                 # Market-if-touched / market order
                 price = prev_close
-                price = max(price, stop_price or -np.inf) if order.is_long else min(price, stop_price or np.inf)
+                price = (
+                    max(price, stop_price or -np.inf)
+                    if order.is_long
+                    else min(price, stop_price or np.inf)
+                )
 
             # Determine entry/exit bar index
             is_market_order = not order.limit and not stop_price
-            time_index = (self.current_step - 1) if is_market_order else self.current_step
+            time_index = (
+                (self.current_step - 1) if is_market_order else self.current_step
+            )
 
             # If order is a SL/TP order, it should close an existing trade it was contingent upon
             if order.parent_trade:
@@ -288,7 +354,13 @@ class TradingEnv(gym.Env):
             # precompute true size in units, accounting for margin and spread/commissions
             size = order.size
             if -1 < size < 1:
-                size = copysign(int((self.margin_available * self._leverage * abs(size)) // adjusted_price), size)
+                size = copysign(
+                    int(
+                        (self.margin_available * self._leverage * abs(size))
+                        // adjusted_price
+                    ),
+                    size,
+                )
                 # Not enough cash/margin even for a single unit
                 if not size:
                     self.orders.remove(order)
@@ -326,7 +398,9 @@ class TradingEnv(gym.Env):
 
             # Open a new trade
             if need_size:
-                self._open_trade(adjusted_price, need_size, order.sl, order.tp, time_index)
+                self._open_trade(
+                    adjusted_price, need_size, order.sl, order.tp, time_index
+                )
 
                 # We need to reprocess the SL/TP orders newly added to the queue.
                 # This allows e.g. SL hitting in the same bar the order was open.
@@ -334,7 +408,10 @@ class TradingEnv(gym.Env):
                 if order.sl or order.tp:
                     if is_market_order:
                         reprocess_orders = True
-                    elif low <= (order.sl or -np.inf) <= high or low <= (order.tp or -np.inf) <= high:
+                    elif (
+                        low <= (order.sl or -np.inf) <= high
+                        or low <= (order.tp or -np.inf) <= high
+                    ):
                         warnings.warn(
                             f"({data.index[-1]}) A contingent SL/TP order would execute in the "
                             "same bar its parent stop/limit order was turned into a trade. "
@@ -384,7 +461,9 @@ class TradingEnv(gym.Env):
         self.closed_trades.append(trade._replace(exit_price=price, exit_bar=time_index))
         self.assets += trade.pnl
 
-    def _open_trade(self, price: float, size: int, sl: float, tp: float, time_index: int):
+    def _open_trade(
+        self, price: float, size: int, sl: float, tp: float, time_index: int
+    ):
         trade = Trade(self, size, price, time_index)
         self.trades.append(trade)
         if tp:

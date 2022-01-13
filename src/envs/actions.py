@@ -1,4 +1,5 @@
 from enum import IntEnum
+
 from src.envs.core.dummy_environment import TradingEnv
 
 

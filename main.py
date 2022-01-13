@@ -1,29 +1,24 @@
+import argparse
 import os
 import pathlib
-import argparse
 from datetime import datetime
 
-# import pickle
 import dill as pickle
-import pandas as pd
-
 import ray
 from ray import tune
-from ray.tune.trial import Trial
-from ray.tune.stopper import MaximumIterationStopper
-from ray.tune.suggest.repeater import Repeater
-from ray.tune.suggest.hyperopt import HyperOptSearch
 from ray.tune import CLIReporter
-from ray.rllib.models import ModelCatalog
-from src.models.batch_norm import BatchNormModel
-from src.utils.tuning_space import get_tuning_params
-from src.trainable.cross_validation import ExperimentCV
-from src.evaluation.util import backtest_expt, plot_all_progress_cv
+from ray.tune.stopper import MaximumIterationStopper
+from ray.tune.suggest.hyperopt import HyperOptSearch
+from ray.tune.suggest.repeater import Repeater
+from ray.tune.trial import Trial
 
-
+from src.evaluation import backtest_expt
+from src.experiments import ExperimentCV
+from src.tuning_space import get_tuning_params
 
 parser = argparse.ArgumentParser()
 # Basic Settings
+parser.add_argument("--local_dir", type=str, required=True)
 parser.add_argument("--ticker", type=str, default="^N225")
 parser.add_argument("--algo", type=str, default="DQN")
 parser.add_argument("--max_iter", type=int, default=10)
@@ -44,7 +39,6 @@ parser.add_argument("--num_samples", type=int, default=30)
 # Other Settings
 parser.add_argument("--seed", type=int, default=3407)
 parser.add_argument("--num_workers", type=int, default=2)
-parser.add_argument("--local_dir", type=str, default="./ray_results")
 parser.add_argument("--expt_name", type=str, default=None)
 parser.add_argument("--debug", action="store_true")
 args = parser.parse_args()
@@ -66,7 +60,9 @@ def main(config):
             config[param] = bounds
         parameter_columns.append(param)
 
-    searcher_alg = Repeater(HyperOptSearch(metric=METRIC, mode=MODE), repeat=args.repeat)
+    searcher_alg = Repeater(
+        HyperOptSearch(metric=METRIC, mode=MODE), repeat=args.repeat
+    )
     stopper = MaximumIterationStopper(max_iter=args.max_iter)
 
     reporter = CLIReporter(
@@ -82,13 +78,22 @@ def main(config):
     )
 
     # Create experimental name
-    timelog = str(datetime.date(datetime.now())) + "_" + datetime.time(datetime.now()).strftime("%H-%M")
-    expt_name = f"{args.algo}__{timelog}" if args.expt_name is None else f"{args.algo}__{args.expt_name}__{timelog}"
+    timelog = (
+        str(datetime.date(datetime.now()))
+        + "_"
+        + datetime.time(datetime.now()).strftime("%H-%M")
+    )
+    expt_name = (
+        f"{args.algo}__{timelog}"
+        if args.expt_name is None
+        else f"{args.algo}__{args.expt_name}__{timelog}"
+    )
     print(expt_name)
 
     def trial_dirname_creator(trial: Trial):
-        return f"{trial.trainable_name}-{trial.config['__trial_index__']}_{trial.trial_id}"
-
+        return (
+            f"{trial.trainable_name}-{trial.config['__trial_index__']}_{trial.trial_id}"
+        )
 
     analysis = tune.run(
         ExperimentCV,
@@ -112,12 +117,10 @@ def main(config):
 
     print(f"This experiment is saved at {pathlib.Path(analysis.best_logdir).parent}")
 
-    plot_all_progress_cv(analysis)
     backtest_expt(analysis)
 
 
 if __name__ == "__main__":
-    ModelCatalog.register_custom_model("batch_norm_model", BatchNormModel)
     ray.shutdown()
     ray.init(num_gpus=0)
     config = {

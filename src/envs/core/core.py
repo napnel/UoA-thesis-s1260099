@@ -1,9 +1,9 @@
+from copy import copy
+from math import copysign
+from typing import Optional, Union
+
 import numpy as np
 import pandas as pd
-from math import copysign
-from copy import copy
-from typing import Optional, Dict, Callable, List, Union
-
 from src.envs.core.dummy_environment import TradingEnv
 
 

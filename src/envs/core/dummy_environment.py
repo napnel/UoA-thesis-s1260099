@@ -1,10 +1,10 @@
 import sys
 from enum import IntEnum
+from typing import Callable, Optional, Tuple
 
 import gym
 import numpy as np
 import pandas as pd
-from typing import Optional, Dict, Callable, List, Tuple, Union
 
 
 class TradingEnv(gym.Env):
@@ -80,7 +80,9 @@ class TradingEnv(gym.Env):
     def _close_trade(self, trade, price: float, time_index: int):
         pass
 
-    def _open_trade(self, price: float, size: int, sl: float, tp: float, time_index: int):
+    def _open_trade(
+        self, price: float, size: int, sl: float, tp: float, time_index: int
+    ):
         pass
 
     @property
