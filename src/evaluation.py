@@ -1,18 +1,16 @@
 import os
-import glob
-from pathlib import Path
 import pickle
-import json
-import pandas as pd
-import matplotlib.pyplot as plt
+from pathlib import Path
 
+import matplotlib.pyplot as plt
+import pandas as pd
 import ray
-from ray import tune
 from ray.tune import ExperimentAnalysis
+
+from src.backtest import backtest
 from src.envs import TradingEnv
-from src.utils import backtest
-from src.trainable.util import prepare_config_for_agent
-from src.utils.tuning_space import get_tuning_params
+from src.tuning_space import get_tuning_params
+from src.util import prepare_config_for_agent
 
 
 def get_expt_results_cv(analysis: ExperimentAnalysis):
@@ -21,7 +19,9 @@ def get_expt_results_cv(analysis: ExperimentAnalysis):
     parameter_table = pd.DataFrame()
 
     for logdir, df in analysis.trial_dataframes.items():
-        df = df[["episode_reward_mean", "evaluation/episode_reward_mean", "timesteps_total"]]
+        df = df[
+            ["episode_reward_mean", "evaluation/episode_reward_mean", "timesteps_total"]
+        ]
         config = all_configs[logdir].copy()
         for k, v in config["env_config"].items():
             config[f"env_config/{k}"] = v
@@ -49,7 +49,12 @@ def get_best_expt(analysis: ExperimentAnalysis):
     tuned_params = list(get_tuning_params(analysis.best_config["_algo"]).keys())
     # print(results_cv["evaluation/episode_reward_mean"].rolling(5).mean())
     last_5_avg: pd.DataFrame = (
-        results_cv["evaluation/episode_reward_mean"].rolling(5).mean().groupby(tuned_params).last().sort_values(ascending=False)
+        results_cv["evaluation/episode_reward_mean"]
+        .rolling(5)
+        .mean()
+        .groupby(tuned_params)
+        .last()
+        .sort_values(ascending=False)
     )
     best_config = dict(zip(last_5_avg.index.names, last_5_avg.index[0]))
     best_progress = results_cv.loc[tuple(best_config.values()), :]
@@ -67,7 +72,9 @@ def plot_all_progress_cv(analysis: ExperimentAnalysis):
     for name, group in expt_results_cv.groupby(tuned_params):
         x = group.index.get_level_values(-1)
         reward_mean_train = group["episode_reward_mean"].rolling(periods).mean().values
-        reward_mean_eval = group["evaluation/episode_reward_mean"].rolling(periods).mean().values
+        reward_mean_eval = (
+            group["evaluation/episode_reward_mean"].rolling(periods).mean().values
+        )
         axes[0].plot(x, reward_mean_train, label=name)
         axes[1].plot(x, reward_mean_eval)
 
@@ -83,7 +90,9 @@ def plot_best_progress_cv(analysis: ExperimentAnalysis):
     for name, group in expt_results_cv.groupby(tuned_params):
         x = group.index.get_level_values(-1)
         reward_mean_train = group["episode_reward_mean"].rolling(periods).mean().values
-        reward_mean_eval = group["evaluation/episode_reward_mean"].rolling(periods).mean().values
+        reward_mean_eval = (
+            group["evaluation/episode_reward_mean"].rolling(periods).mean().values
+        )
         axes[0].plot(x, reward_mean_train, label=name)
         axes[1].plot(x, reward_mean_eval)
 
@@ -116,10 +125,10 @@ def get_best_trials(analysis: ExperimentAnalysis, best_config: dict):
 
 
 def backtest_expt(analysis: ExperimentAnalysis, debug=False):
-    stats = pd.DataFrame()
     all_config = analysis.get_all_configs()
     best_progress, best_config = get_best_expt(analysis)
     best_trials = get_best_trials(analysis, best_config)
+
     agent = None
     for trial in best_trials:
         config = all_config[trial.logdir].copy()
@@ -141,38 +150,53 @@ def backtest_expt(analysis: ExperimentAnalysis, debug=False):
         env_eval = TradingEnv(**algo_config["evaluation_config"]["env_config"])
         env_test = TradingEnv(**env_test_config)
 
-        save_dir = Path(trial.logdir).resolve().parent
+        backtest_dir = Path(trial.logdir).resolve().parent / "backtest-stats"
 
-        stats_train = backtest(
+        backtest(
             env_train,
             agent,
-            save_dir=os.path.join(save_dir, f"backtest-stats-train-{fold_id}"),
+            save_dir=os.path.join(backtest_dir, f"train-{fold_id}"),
             plot=True,
             open_browser=debug,
         )
-        stats_eval = backtest(
+        backtest(
             env_eval,
             agent,
-            save_dir=os.path.join(save_dir, f"backtest-stats-eval-{fold_id}"),
+            save_dir=os.path.join(backtest_dir, f"eval-{fold_id}"),
             plot=True,
             open_browser=debug,
         )
-        stats_test = backtest(
+        backtest(
             env_test,
             agent,
-            save_dir=os.path.join(save_dir, f"backtest-stats-test-{fold_id}"),
+            save_dir=os.path.join(backtest_dir, f"test-{fold_id}"),
             plot=True,
+            open_browser=debug,
         )
-        stats_bh = backtest(env_test, agent="Buy&Hold", save_dir=os.path.join(trial.logdir, "buy-and-hold"), plot=False)
 
-        print("===" * 10, "Training", "===" * 10)
-        print(stats_train.iloc[6:11])
-        print("===" * 10, "Validation", "===" * 10)
-        print(stats_eval.iloc[6:11])
-        print("===" * 10, "Testing", "===" * 10)
-        print(stats_test.iloc[6:11])
-        # stats = pd.concat([stats_train, stats_eval, stats_test, stats_bh], axis=1)
-        # stats.columns = ["train", "eval", "test", "buy&hold"]
-        # print(stats)
-
-    return stats
+        backtest(
+            env_train,
+            agent="Buy&Hold",
+            save_dir=os.path.join(
+                backtest_dir.parent.parent,
+                "backtest-stats-buy&hold",
+                f"train-{fold_id}",
+            ),
+            plot=False,
+        )
+        backtest(
+            env_eval,
+            agent="Buy&Hold",
+            save_dir=os.path.join(
+                backtest_dir.parent.parent, "backtest-stats-buy&hold", f"eval-{fold_id}"
+            ),
+            plot=False,
+        )
+        backtest(
+            env_test,
+            agent="Buy&Hold",
+            save_dir=os.path.join(
+                backtest_dir.parent.parent, "backtest-stats-buy&hold", f"test-{fold_id}"
+            ),
+            plot=False,
+        )

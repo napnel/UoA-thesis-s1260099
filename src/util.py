@@ -1,9 +1,12 @@
 import pathlib
-from typing import Dict, Any
-from ray.rllib.agents import dqn, a3c, ppo, sac, ddpg
-from src.utils import DataLoader, Preprocessor
+from typing import Any, Dict
+
+from ray.rllib.agents import a3c, ddpg, dqn, ppo, sac
+
+from src.data_loader import DataLoader
 from src.envs.actions import BuySell, LongNeutralShort
 from src.envs.reward_func import equity_log_return_reward, initial_equity_return_reward
+from src.preprocessor import Preprocessor
 
 REWARD_FUNC = {
     "equity_log_return_reward": equity_log_return_reward,
@@ -46,7 +49,6 @@ def get_agent_class(algo: str, _config: Dict[str, Any]):
         config["rollout_fragment_length"] = 4
         config["target_network_update_freq"] = 256
         config["tau"] = 1e-3
-        config["train_batch_size"] = 128
         config["Q_model"] = {
             "custom_model": _config["model"]["custom_model"],
             "fcnet_hiddens": _config["model"]["fcnet_hiddens"],
@@ -75,17 +77,28 @@ def prepare_config_for_agent(_config: Dict[str, Any], logdir: str):
     index = config.pop("__trial_index__")
 
     if isinstance(config["env_config"]["reward_func"], str):
-        config["env_config"]["reward_func"] = REWARD_FUNC[config["env_config"]["reward_func"]]
+        config["env_config"]["reward_func"] = REWARD_FUNC[
+            config["env_config"]["reward_func"]
+        ]
     if isinstance(config["env_config"]["actions"], str):
         config["env_config"]["actions"] = ACTIONS[config["env_config"]["actions"]]
 
-    config["env_config"] = {k: v for k, v in config["env_config"].items() if v is not None}
+    config["env_config"] = {
+        k: v for k, v in config["env_config"].items() if v is not None
+    }
     config["evaluation_config"]["env_config"] = config["env_config"].copy()
     config["_env_test_config"] = config["env_config"].copy()
 
     # Divide the data according to the index
     data, features = DataLoader.prepare_data(ticker, pathlib.Path(logdir).parent.parent)
-    data_train, features_train, data_eval, features_eval, data_test, features_test = Preprocessor.create_cv_from_index(
+    (
+        data_train,
+        features_train,
+        data_eval,
+        features_eval,
+        data_test,
+        features_test,
+    ) = Preprocessor.create_cv_from_index(
         data,
         features,
         index,

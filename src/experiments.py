@@ -1,8 +1,9 @@
 import pathlib
-from typing import Dict, Any
+from typing import Any, Dict
 
 from ray import tune
-from src.trainable.util import prepare_config_for_agent
+
+from src.util import prepare_config_for_agent
 
 
 class ExperimentCV(tune.Trainable):

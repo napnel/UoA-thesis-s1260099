@@ -1,18 +1,17 @@
 import warnings
 from datetime import datetime
-from dateutil.relativedelta import relativedelta
 from typing import Tuple
 
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-
-from ta.trend import MACD, ADXIndicator
-from ta.momentum import RSIIndicator, StochRSIIndicator
-from ta.volatility import BollingerBands, average_true_range
-from ta.volume import money_flow_index, chaikin_money_flow
+from dateutil.relativedelta import relativedelta
 from minepy import MINE
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from ta.momentum import RSIIndicator, StochRSIIndicator
+from ta.trend import MACD, ADXIndicator
+from ta.volatility import BollingerBands, average_true_range
+from ta.volume import chaikin_money_flow, money_flow_index
 
 
 class Preprocessor:
@@ -35,8 +34,16 @@ class Preprocessor:
         data_eval, features_eval = self.align_date(data, features_eval)
 
         scaler = StandardScaler()
-        features_train = pd.DataFrame(scaler.fit_transform(features_train), index=features_train.index, columns=features_train.columns)
-        features_eval = pd.DataFrame(scaler.fit_transform(features_eval), index=features_eval.index, columns=features_eval.columns)
+        features_train = pd.DataFrame(
+            scaler.fit_transform(features_train),
+            index=features_train.index,
+            columns=features_train.columns,
+        )
+        features_eval = pd.DataFrame(
+            scaler.fit_transform(features_eval),
+            index=features_eval.index,
+            columns=features_eval.columns,
+        )
 
         return data_train, features_train, data_eval, features_eval
 
@@ -49,14 +56,25 @@ class Preprocessor:
     def extract_features(self, data: pd.DataFrame):
         features = pd.DataFrame(index=data.index)
 
-        open, high, low, close, volume = data["Open"], data["High"], data["Low"], data["Close"], data["Volume"]
+        open, high, low, close, volume = (
+            data["Open"],
+            data["High"],
+            data["Low"],
+            data["Close"],
+            data["Volume"],
+        )
         prev_close = close.shift(1)
 
         # features["log_return"] = data["Close"].apply(np.log1p).diff()
         features["rate_of_return"] = close.pct_change()
         features["volume"] = volume.apply(np.log1p)
         features["candle_value"] = ((close - open) / (high - low)).fillna(0)
-        features["true_range"] = pd.concat([np.abs(high - prev_close), np.abs(low - prev_close)], axis=1).max(axis=1) / prev_close
+        features["true_range"] = (
+            pd.concat(
+                [np.abs(high - prev_close), np.abs(low - prev_close)], axis=1
+            ).max(axis=1)
+            / prev_close
+        )
         features["gap_range"] = np.abs(open - prev_close) / prev_close
         features["day_range"] = (high - low) / prev_close
         features["shadow_range"] = ((high - low) - np.abs(open - close)) / prev_close
@@ -66,14 +84,30 @@ class Preprocessor:
         for period in aggregated_periods:
             features[f"rate_of_return_{period}"] = close.pct_change(period)
             features[f"volume_{period}"] = features["volume"].rolling(period).mean()
-            features[f"candle_value_{period}"] = features["candle_value"].rolling(period).mean()
-            features[f"volatility_{period}"] = features["rate_of_return"].rolling(period).std()
-            features[f"gap_ma_{period}"] = (close - close.rolling(period).mean()) / close.rolling(period).mean()
-            features[f"true_range_{period}"] = features["true_range"].rolling(period).mean()
-            features[f"gap_range_{period}"] = features["gap_range"].rolling(period).mean()
-            features[f"day_range_{period}"] = features["day_range"].rolling(period).mean()
-            features[f"shadow_range_{period}"] = features["shadow_range"].rolling(period).mean()
-            features[f"hl_range_{period}"] = high.rolling(period).max() - low.rolling(period).min()
+            features[f"candle_value_{period}"] = (
+                features["candle_value"].rolling(period).mean()
+            )
+            features[f"volatility_{period}"] = (
+                features["rate_of_return"].rolling(period).std()
+            )
+            features[f"gap_ma_{period}"] = (
+                close - close.rolling(period).mean()
+            ) / close.rolling(period).mean()
+            features[f"true_range_{period}"] = (
+                features["true_range"].rolling(period).mean()
+            )
+            features[f"gap_range_{period}"] = (
+                features["gap_range"].rolling(period).mean()
+            )
+            features[f"day_range_{period}"] = (
+                features["day_range"].rolling(period).mean()
+            )
+            features[f"shadow_range_{period}"] = (
+                features["shadow_range"].rolling(period).mean()
+            )
+            features[f"hl_range_{period}"] = (
+                high.rolling(period).max() - low.rolling(period).min()
+            )
 
         # Trend Indicators
         macd = MACD(data["Close"], window_slow=26, window_fast=12, window_sign=9)
@@ -91,8 +125,12 @@ class Preprocessor:
         features["StochRSI"] = stoch_rsi.stochrsi_k() - stoch_rsi.stochrsi_d()
 
         # Volume Indicator
-        features["MFI"] = money_flow_index(data["High"], low, data["Close"], volume, window=14)
-        features["CMF"] = chaikin_money_flow(data["High"], low, data["Close"], data["Volume"])
+        features["MFI"] = money_flow_index(
+            data["High"], low, data["Close"], volume, window=14
+        )
+        features["CMF"] = chaikin_money_flow(
+            data["High"], low, data["Close"], data["Volume"]
+        )
 
         # Volatility Indicator
         features["ATR"] = average_true_range(high, low, close, window=14)
@@ -105,14 +143,26 @@ class Preprocessor:
     def extract_features_v2(self, data: pd.DataFrame):
         features = pd.DataFrame(index=data.index)
 
-        open, high, low, close, volume = data["Open"], data["High"], data["Low"], data["Close"], data["Volume"]
+        open, high, low, close, volume = (
+            data["Open"],
+            data["High"],
+            data["Low"],
+            data["Close"],
+            data["Volume"],
+        )
         prev_close = close.shift(1)
 
         features["log_return"] = close.apply(np.log1p).diff()
         # features["rate_of_return"] = close.pct_change()
         features["log_volume"] = volume.apply(np.log1p)
         features["candle_value"] = ((close - open) / (high - low)).fillna(0)
-        features["true_range"] = pd.concat([np.abs(high - prev_close), np.abs(low - prev_close), high - low], axis=1).max(axis=1) / prev_close
+        features["true_range"] = (
+            pd.concat(
+                [np.abs(high - prev_close), np.abs(low - prev_close), high - low],
+                axis=1,
+            ).max(axis=1)
+            / prev_close
+        )
         features["gap_range"] = np.abs(open - prev_close) / prev_close
         features["shadow_range"] = ((high - low) - np.abs(open - close)) / prev_close
         features["real_body"] = abs(open - close) / prev_close
@@ -120,17 +170,32 @@ class Preprocessor:
         aggregated_periods = [5, 20, 50, 100, 200]
 
         for period in aggregated_periods:
-            features[f"candle_value_{period}"] = features["candle_value"].rolling(period).mean()
-            features[f"gap_ma_{period}"] = (close - close.rolling(period).mean()) / close.rolling(period).mean()
-            features[f"true_range_{period}"] = features["true_range"].rolling(period).mean()
+            features[f"candle_value_{period}"] = (
+                features["candle_value"].rolling(period).mean()
+            )
+            features[f"gap_ma_{period}"] = (
+                close - close.rolling(period).mean()
+            ) / close.rolling(period).mean()
+            features[f"true_range_{period}"] = (
+                features["true_range"].rolling(period).mean()
+            )
             features[f"high_low_range_{period}"] = (
-                pd.concat([high.rolling(period).max() - close, close - low.rolling(period).min()], axis=1).min(axis=1) / close
+                pd.concat(
+                    [
+                        high.rolling(period).max() - close,
+                        close - low.rolling(period).min(),
+                    ],
+                    axis=1,
+                ).min(axis=1)
+                / close
             )
         data, features = self.align_date(data, features)
         return data, features.sort_index(axis=1)
 
     @classmethod
-    def select_feature(self, data: pd.DataFrame, _features: pd.DataFrame, corr_threshold=0.8):
+    def select_feature(
+        self, data: pd.DataFrame, _features: pd.DataFrame, corr_threshold=0.8
+    ):
         features = _features.iloc[:-1, :]
         y = data["Close"].pct_change().shift(-1).dropna()
 
@@ -160,7 +225,10 @@ class Preprocessor:
             print(f"The corr is high {feature_1} and {feature_2}, drop {drop_feature}")
 
         features = _features.drop(list(drop_set), axis=1)
-        print(f"Delete features with high corr: {_features.shape[1]} --> {_features.shape[1] - len(drop_set)}")
+        print(
+            f"Delete features with high corr: \
+            {_features.shape[1]} --> {_features.shape[1] - len(drop_set)}"
+        )
         return features
 
     @classmethod
@@ -183,8 +251,16 @@ class Preprocessor:
 
         if scaling:
             scaler = StandardScaler()
-            features_train = pd.DataFrame(scaler.fit_transform(features_train), index=features_train.index, columns=features_train.columns)
-            features_eval = pd.DataFrame(scaler.transform(features_eval), index=features_eval.index, columns=features_eval.columns)
+            features_train = pd.DataFrame(
+                scaler.fit_transform(features_train),
+                index=features_train.index,
+                columns=features_train.columns,
+            )
+            features_eval = pd.DataFrame(
+                scaler.transform(features_eval),
+                index=features_eval.index,
+                columns=features_eval.columns,
+            )
 
         return data_train, features_train, data_eval, features_eval
 
@@ -212,16 +288,34 @@ class Preprocessor:
 
             if scaling:
                 scaler = StandardScaler()
-                features_train = pd.DataFrame(scaler.fit_transform(features_train), index=features_train.index, columns=features_train.columns)
-                features_eval = pd.DataFrame(scaler.transform(features_eval), index=features_eval.index, columns=features_eval.columns)
+                features_train = pd.DataFrame(
+                    scaler.fit_transform(features_train),
+                    index=features_train.index,
+                    columns=features_train.columns,
+                )
+                features_eval = pd.DataFrame(
+                    scaler.transform(features_eval),
+                    index=features_eval.index,
+                    columns=features_eval.columns,
+                )
 
             yield data_train, features_train, data_eval, features_eval
 
             train_start = train_start + relativedelta(years=1)
 
     @classmethod
-    def create_cv_from_index(self, data: pd.DataFrame, features: pd.DataFrame, index, train_years, eval_years, train_start="2010-01-01"):
-        train_start = datetime.strptime(train_start, "%Y-%m-%d") + relativedelta(years=index)
+    def create_cv_from_index(
+        self,
+        data: pd.DataFrame,
+        features: pd.DataFrame,
+        index,
+        train_years,
+        eval_years,
+        train_start="2010-01-01",
+    ):
+        train_start = datetime.strptime(train_start, "%Y-%m-%d") + relativedelta(
+            years=index
+        )
         train_end = train_start + relativedelta(years=train_years)
         eval_start = train_end
         eval_end = eval_start + relativedelta(years=eval_years)
@@ -231,21 +325,40 @@ class Preprocessor:
         data_train = data.loc[train_start:train_end].copy()
         data_eval = data.loc[eval_start:eval_end].copy()
         data_test = data.loc[test_start:test_end].copy()
-        
+
         features_train = features.loc[train_start:train_end].copy()
         features_eval = features.loc[eval_start:eval_end].copy()
         features_test = features.loc[test_start:test_end].copy()
 
         scaler = StandardScaler()
-        features_train = pd.DataFrame(scaler.fit_transform(features_train), index=features_train.index, columns=features_train.columns)
-        features_eval = pd.DataFrame(scaler.transform(features_eval), index=features_eval.index, columns=features_eval.columns)
-        features_test = pd.DataFrame(scaler.transform(features_test), index=features_test.index, columns=features_test.columns)
+        features_train = pd.DataFrame(
+            scaler.fit_transform(features_train),
+            index=features_train.index,
+            columns=features_train.columns,
+        )
+        features_eval = pd.DataFrame(
+            scaler.transform(features_eval),
+            index=features_eval.index,
+            columns=features_eval.columns,
+        )
+        features_test = pd.DataFrame(
+            scaler.transform(features_test),
+            index=features_test.index,
+            columns=features_test.columns,
+        )
 
         assert len(data_train) == len(features_train)
         assert len(data_eval) == len(features_eval)
         assert len(data_test) == len(features_test)
 
-        return data_train, features_train, data_eval, features_eval, data_test, features_test
+        return (
+            data_train,
+            features_train,
+            data_eval,
+            features_eval,
+            data_test,
+            features_test,
+        )
 
     @classmethod
     def train_test_split(
@@ -256,13 +369,25 @@ class Preprocessor:
         scaling: bool = True,
     ):
         # assert (data.index == features.index).all(), f"{data.index}, {features.index}"
-        data_train, data_eval = train_test_split(data, test_size=test_size, shuffle=False)
-        features_train, features_eval = train_test_split(features, test_size=test_size, shuffle=False)
+        data_train, data_eval = train_test_split(
+            data, test_size=test_size, shuffle=False
+        )
+        features_train, features_eval = train_test_split(
+            features, test_size=test_size, shuffle=False
+        )
 
         if scaling:
             scaler = StandardScaler()
-            features_train = pd.DataFrame(scaler.fit_transform(features_train), index=features_train.index, columns=features_train.columns)
-            features_eval = pd.DataFrame(scaler.transform(features_eval), index=features_eval.index, columns=features_eval.columns)
+            features_train = pd.DataFrame(
+                scaler.fit_transform(features_train),
+                index=features_train.index,
+                columns=features_train.columns,
+            )
+            features_eval = pd.DataFrame(
+                scaler.transform(features_eval),
+                index=features_eval.index,
+                columns=features_eval.columns,
+            )
 
         return data_train, features_train, data_eval, features_eval
 
@@ -270,14 +395,21 @@ class Preprocessor:
     def align_date(self, data: pd.DataFrame, features: pd.DataFrame):
         features = features.dropna(axis=0, how="any")
         data = data.loc[features.index[0] : features.index[-1]].dropna(axis=0)
-        assert len(data) == len(features), f"data length: {len(data)}, features length: {len(features)}"
+        assert len(data) == len(
+            features
+        ), f"data length: {len(data)}, features length: {len(features)}"
         return data, features
 
 
 def main():
     import matplotlib.pyplot as plt
 
-    df = pd.read_csv("./data/3600/ethusd/2021-01-01.csv", parse_dates=[0]).set_index("Date") / 10
+    df = (
+        pd.read_csv("./data/3600/ethusd/2021-01-01.csv", parse_dates=[0]).set_index(
+            "Date"
+        )
+        / 10
+    )
 
     df = Preprocessor.clean_data(df)
     features = Preprocessor.extract_features(df)

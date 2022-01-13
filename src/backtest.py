@@ -1,13 +1,12 @@
 import os
 import warnings
-import pandas as pd
-from pprint import pprint
 from typing import Optional
+
+import pandas as pd
 
 with warnings.catch_warnings():
     warnings.simplefilter("ignore", UserWarning)
-    import backtesting
-    from backtesting import Strategy, Backtest
+    from backtesting import Backtest, Strategy
 
 
 class DRLStrategy(Strategy):
@@ -36,7 +35,9 @@ class DRLStrategy(Strategy):
             elif self.agent == "Sell&Hold":
                 action = 0 if len(self.env.actions) == 2 else 0
             elif self.agent:
-                action = self.agent.compute_single_action(self.env.observation, explore=False)
+                action = self.agent.compute_single_action(
+                    self.env.observation, explore=False
+                )
             # do Trade
             self.env.action = action
             if self.env.done:
@@ -53,10 +54,19 @@ class DRLStrategy(Strategy):
     def error(self):
         print("===" * 10, "DEBUG", "===" * 10)
         print("Env Step: ", self.env.current_step)
-        print("Env Position: ", self.env.position, "| Backtest Position: ", self.position)
-        print("Env Price: ", self.env.closing_price, "| Backtest Price: ", self.data.Close[-1])
+        print(
+            "Env Position: ", self.env.position, "| Backtest Position: ", self.position
+        )
+        print(
+            "Env Price: ",
+            self.env.closing_price,
+            "| Backtest Price: ",
+            self.data.Close[-1],
+        )
         print("Env Equity: ", self.env.equity, "| Backtest Equity: ", self.equity)
-        print("Env Assets: ", self.env.assets, "| Backtest Assets: ", self._broker._cash)
+        print(
+            "Env Assets: ", self.env.assets, "| Backtest Assets: ", self._broker._cash
+        )
         print("===" * 10, "=====", "===" * 10)
         self.render()
         return "See Debug Above"
@@ -87,7 +97,7 @@ class DRLStrategy(Strategy):
 def backtest(
     env,
     agent="Random",
-    save_dir: Optional[str] = None,
+    save_dir: str = "./backtest-stats",
     plot: bool = True,
     open_browser: bool = True,
     debug: bool = False,
@@ -103,7 +113,7 @@ def backtest(
     )
     stats = bt.run(env=env, agent=agent, debug=debug)
 
-    if save_dir:
+    if not os.path.exists(save_dir):
         os.makedirs(save_dir, exist_ok=True)
         performance = stats.loc[
             [
