@@ -1,0 +1,6 @@
+ray[default, tune, rllib]==1.9.1
+scikit-learn
+yfinance
+ta
+backtesting
+minepy
