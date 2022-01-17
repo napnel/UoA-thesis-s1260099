@@ -1,4 +1,5 @@
 import argparse
+import enum
 import glob
 import os
 import pickle
@@ -8,6 +9,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from empyrical import annual_return, max_drawdown, sharpe_ratio
+
+# try:
+#     plt.style.use(["science", "ieee"])
+# except Exception:
+#     plt.style.use(["science", "no-latex"])
 
 pd.options.display.float_format = "{:.2f}".format
 
@@ -74,89 +80,86 @@ def summary_learning_curve(local_dir: str):
         bh_reward_mean = sum(bh_reward_cv) / len(bh_reward_cv)
         return bh_reward_mean
 
-    with plt.style.context(["science", "ieee"]):
-        fig, axes = plt.subplots(1, 2, figsize=(6, 3))
+    fig, axes = plt.subplots(1, 2, figsize=(6, 3))
 
-        min_last_timestep = 1e9
-        max_first_timestep = 0
-        timesteps = None
-        for expt_path in algo_expt_paths:
-            algo = expt_path.split("__")[0][-3:]
+    min_last_timestep = 1e9
+    max_first_timestep = 0
+    timesteps = None
+    for expt_path in algo_expt_paths:
+        algo = expt_path.split("__")[0][-3:]
 
-            with open(os.path.join(expt_path, "results.pkl"), "rb") as f:
-                results: pd.DataFrame = pickle.load(f)
+        with open(os.path.join(expt_path, "results.pkl"), "rb") as f:
+            results: pd.DataFrame = pickle.load(f)
 
-            params = list(results.index.names)
-            params.remove("timesteps_total")
-            alpha = 0.3
-            # Get best results with considering reward condition
-            bh_reward_train = get_bh_reward("train")
-            # results_filtered = results.query("episode_reward_mean > @bh_reward_train")
-            results_filtered = results.query("episode_reward_mean > -1")
-            top_train = (
-                results_filtered["episode_reward_mean"]
-                .ewm(alpha=alpha)
-                .mean()
-                .groupby(params)
-                .last()
-                .sort_values(ascending=False)
-            )
-            top_valid = (
-                results_filtered["evaluation/episode_reward_mean"]
-                .ewm(alpha=alpha)
-                .mean()
-                .groupby(params)
-                .last()
-                .sort_values(ascending=False)
-            )
-            best_config_train = dict(zip(params, top_train.index[0]))
-            best_results_train = results.loc[tuple(best_config_train.values())]
-            best_config_valid = dict(zip(params, top_valid.index[0]))
-            best_results_valid = results.loc[tuple(best_config_valid.values())]
-
-            # Plot
-            timesteps = best_results_train.index.values
-            min_last_timestep = min(min_last_timestep, timesteps[-1])
-            max_first_timestep = max(max_first_timestep, timesteps[0])
-            training_reward = (
-                best_results_train["episode_reward_mean"].ewm(alpha=alpha).mean()
-            )
-            validation_reward = (
-                best_results_valid["evaluation/episode_reward_mean"]
-                .ewm(alpha=alpha)
-                .mean()
-            )
-            axes[0].plot(timesteps, training_reward, label=algo)
-            axes[1].plot(timesteps, validation_reward, label=algo)
-
-        bh_reward_train = pd.Series(
-            [get_bh_reward("train")] * len(timesteps),
-            index=training_reward.index,
+        params = list(results.index.names)
+        params.remove("timesteps_total")
+        alpha = 0.3
+        # Get best results with considering reward condition
+        bh_reward_train = get_bh_reward("train")
+        # results_filtered = results.query("episode_reward_mean > @bh_reward_train")
+        results_filtered = results.query("episode_reward_mean > -1")
+        top_train = (
+            results_filtered["episode_reward_mean"]
+            .ewm(alpha=alpha)
+            .mean()
+            .groupby(params)
+            .last()
+            .sort_values(ascending=False)
         )
-        bh_reward_eval = pd.Series(
-            [get_bh_reward("eval")] * len(timesteps),
-            index=validation_reward.index,
+        top_valid = (
+            results_filtered["evaluation/episode_reward_mean"]
+            .ewm(alpha=alpha)
+            .mean()
+            .groupby(params)
+            .last()
+            .sort_values(ascending=False)
         )
-        axes[0].plot(
-            timesteps, bh_reward_train, label="B\&H", linestyle=(10, (5, 3, 1, 3, 1, 3))
-        )
-        axes[1].plot(
-            timesteps, bh_reward_eval, label="B\&H", linestyle=(10, (5, 3, 1, 3, 1, 3))
-        )
+        best_config_train = dict(zip(params, top_train.index[0]))
+        best_results_train = results.loc[tuple(best_config_train.values())]
+        best_config_valid = dict(zip(params, top_valid.index[0]))
+        best_results_valid = results.loc[tuple(best_config_valid.values())]
 
-        axes[0].set_title("Training")
-        axes[1].set_title("Validation")
-        axes[0].set_ylabel("Reward")
-        axes[0].set_xlabel("Timesteps")
-        axes[1].set_xlabel("Timesteps")
-        axes[0].set_xlim(max_first_timestep, min_last_timestep)
-        axes[1].set_xlim(max_first_timestep, min_last_timestep)
-        axes[0].legend(loc="upper left")
-        axes[1].legend(loc="upper left")
+        # Plot
+        timesteps = best_results_train.index.values
+        min_last_timestep = min(min_last_timestep, timesteps[-1])
+        max_first_timestep = max(max_first_timestep, timesteps[0])
+        training_reward = (
+            best_results_train["episode_reward_mean"].ewm(alpha=alpha).mean()
+        )
+        validation_reward = (
+            best_results_valid["evaluation/episode_reward_mean"].ewm(alpha=alpha).mean()
+        )
+        axes[0].plot(timesteps, training_reward, label=algo)
+        axes[1].plot(timesteps, validation_reward, label=algo)
 
-        local_dir = str(Path(algo_expt_paths[0]).parent)
-        plt.savefig(os.path.join(local_dir, "Learning Curve"))
-        plt.close("all")
+    bh_reward_train = pd.Series(
+        [get_bh_reward("train")] * len(timesteps),
+        index=training_reward.index,
+    )
+    bh_reward_eval = pd.Series(
+        [get_bh_reward("eval")] * len(timesteps),
+        index=validation_reward.index,
+    )
+    axes[0].plot(
+        timesteps, bh_reward_train, label="B\&H", linestyle=(10, (5, 3, 1, 3, 1, 3))
+    )
+    axes[1].plot(
+        timesteps, bh_reward_eval, label="B\&H", linestyle=(10, (5, 3, 1, 3, 1, 3))
+    )
+
+    axes[0].set_title("Training")
+    axes[1].set_title("Validation")
+    axes[0].set_ylabel("Reward")
+    axes[0].set_xlabel("Timesteps")
+    axes[1].set_xlabel("Timesteps")
+    axes[0].set_xlim(max_first_timestep, min_last_timestep)
+    axes[1].set_xlim(max_first_timestep, min_last_timestep)
+    axes[0].legend(loc="upper left")
+    axes[1].legend(loc="upper left")
+
+    local_dir = str(Path(algo_expt_paths[0]).parent)
+    plt.savefig(os.path.join(local_dir, "Learning Curve"))
+    plt.close("all")
 
 
 def get_performance_from_equity(local_dir: str):
@@ -223,9 +226,66 @@ def get_performance_from_equity(local_dir: str):
     )
 
 
+def plot_summary_equity(local_dir):
+    algo_expt_paths = sorted(glob.glob(os.path.join(local_dir, "*__*")))
+
+    fig, axes = plt.subplots(1, 1, figsize=(6, 3))
+    summary_equity_curve = pd.DataFrame()
+    for i, expt_path in enumerate(algo_expt_paths):
+        algo = expt_path.split("__")[0][-3:]
+        print("===" * 15, algo, "===" * 15)
+        print(expt_path)
+        backtest_paths = glob.glob(os.path.join(expt_path, "backtest-stats-test*"))
+        backtest_paths = sorted(backtest_paths)
+        all_period_equity_curve = pd.Series()
+        for backtest_path in backtest_paths:
+            equity_curve = pd.read_csv(
+                os.path.join(backtest_path, "equity_curve.csv"), index_col=0
+            )["Equity"]
+            all_period_equity_curve = pd.concat(
+                [all_period_equity_curve, equity_curve], axis=0
+            )
+
+        all_period_equity_curve.name = algo
+        summary_equity_curve = pd.concat(
+            [summary_equity_curve, all_period_equity_curve], axis=1
+        )
+    bh_dir = os.path.join(local_dir, "backtest-stats-buy&hold/test-*")
+    bh_folder_cv = sorted(glob.glob(bh_dir))
+    bh_all_period_equity_curve = pd.Series()
+    for bh_folder in bh_folder_cv:
+        equity_curve = pd.read_csv(
+            os.path.join(bh_folder, "equity_curve.csv"), index_col=0
+        )["Equity"]
+        bh_all_period_equity_curve = pd.concat(
+            [bh_all_period_equity_curve, equity_curve]
+        )
+
+    bh_all_period_equity_curve.name = "B\&H"
+    summary_equity_curve = pd.concat(
+        [summary_equity_curve, bh_all_period_equity_curve], axis=1
+    )
+    print(summary_equity_curve)
+
+    summary_equity_curve[(summary_equity_curve == 100000).all(axis=1)] = np.nan
+    summary_equity_curve.plot(ax=axes)
+
+    axes.set_title("Equity Curve")
+    axes.set_ylabel("Equity")
+    axes.set_xlabel("Date")
+    local_dir = str(Path(algo_expt_paths[0]).parent)
+    plt.savefig(os.path.join(local_dir, "Equity Curve"))
+    plt.close("all")
+
+
+def analysis_position(local_dir: str):
+    pass
+
+
 if __name__ == "__main__":
     local_dir = Path(args.local_dir).resolve()
     local_dir = os.path.join(local_dir)
     summary_computation_time(local_dir)
     summary_learning_curve(local_dir)
     get_performance_from_equity(local_dir)
+    plot_summary_equity(local_dir)
