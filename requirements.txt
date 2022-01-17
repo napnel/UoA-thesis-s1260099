@@ -1,6 +1,12 @@
+torch==1.10.1
+tensorflow==2.7.0
 ray[default, tune, rllib]==1.9.1
 scikit-learn
+hyperopt
 yfinance
 ta
 backtesting
-minepy
+minepy==1.0.0
+empyrical
+dill
+SciencePlots
