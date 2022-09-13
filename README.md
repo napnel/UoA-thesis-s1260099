@@ -2,7 +2,7 @@
 
 This repository is the program code for the thesis of an undergraduate student at the University of Aizu.
 
-The paper is [An Evaluation on Deep Reinforcement Learning Algorithms for Stock Trading]("paper/s1260099.pdf").
+The paper is [An Evaluation on Deep Reinforcement Learning Algorithms for Stock Trading](paper/s1260099.pdf).
 
 ## Installation using docker (Recommended)
 
